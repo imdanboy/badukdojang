@@ -100,7 +100,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
 > Implementation + Test = ONE todo. Never separate.
 <!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
 
-- [ ] 1. Project scaffolding: Vite + Preact + TS + @sabaki/* dependencies
+- [x] 1. Project scaffolding: Vite + Preact + TS + @sabaki/* dependencies
   What to do: Initialize a Vite Preact-TS project with Bun. Install `@sabaki/shudan`, `@sabaki/go-board`, `@sabaki/immutable-gametree`, `@sabaki/sgf` via `bun add`. Add Vitest and Playwright as dev deps. Create the basic `src/App.tsx` shell with a centered full-viewport container div. Configure `tsconfig.json` with strict mode. Add `.gitignore` for `node_modules/`, `dist/`, `.omo/evidence/`. Set up `bun run dev` (Vite dev server) and verify it boots to `localhost:5173` with a blank page.
   Must NOT do: Do NOT install `@sabaki/gtp` (phase 2). Do NOT set up Tauri/Electron/Wails. Do NOT create any game logic yet — just the shell. Do NOT skip strict TypeScript mode.
   Parallelization: Wave 1 | Blocked by: nothing | Blocks: T2, T3, T4, T5, T6, T7, T8
@@ -118,7 +118,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: `bun run build` should succeed with no TS errors. Run `bunx tsc --noEmit` — must exit 0. Evidence: `.omo/evidence/task-1-baduk-mvp-tsc.txt`.
   Commit: Y | chore(init): scaffold vite preact-ts project with @sabaki/* deps
 
-- [ ] 2. Board rendering: interactive Go board with @sabaki/shudan
+- [x] 2. Board rendering: interactive Go board with @sabaki/shudan
   What to do: Create `src/components/Board.tsx` — a Preact component that renders `@sabaki/shudan`'s `<Goban>` with a `signMap` prop. The `signMap` is a 2D array of `1` (black), `-1` (white), `0` (empty) generated from a `@sabaki/go-board` instance. Add a board-size state (`9 | 13 | 19`) with a `<select>` dropdown in `App.tsx`. Initialize an empty board on each size change using `Board.fromDimensions(width, height)` (NOT `new Board(width, height)` which takes a signMap, not dimensions). Wire Shudan's `onVertexClick` to console.log the clicked vertex for now (real placement is T3). Enable `showCoordinates` prop. Set `vertexSize` via a `ResizeObserver` on the container: calculate `vertexSize = Math.floor(containerWidth / boardSize)` and pass as a number prop (Shudan requires a fixed pixel number, not CSS-based sizing). Enable `fuzzyStonePlacement` and `animateStonePlacement` together (animation ONLY works when fuzzy is also enabled). For the last-move marker, use the `markerMap` prop with a `{ [x]: { [y]: { type: 'point' } } }` entry at the most recent stone position (there is NO `showLastMoveMarker` prop — it does not exist in Shudan).
   Must NOT do: Do NOT implement stone placement logic yet (T3). Do NOT implement undo/redo yet (T4). Do NOT create the control bar yet (T6). The click handler logs only. Do NOT use `showLastMoveMarker` prop — it does not exist.
   Parallelization: Wave 2 | Blocked by: T1 | Blocks: T3, T6, T8
@@ -143,7 +143,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: Verify clicking outside the board does NOT trigger `onVertexClick` (click on padding). Shudan handles this — verify `page.locator('.shudan').getBoundingClientRect()` is within app container. Evidence: `.omo/evidence/task-2-baduk-mvp-edgeclick.txt`.
   Commit: Y | feat(board): render interactive goban with shudan, board size selector
 
-- [ ] 3. Game rules integration: stone placement, captures, ko, pass
+- [x] 3. Game rules integration: stone placement, captures, ko, pass
   What to do: Create `src/lib/gameState.ts` — a module wrapping `@sabaki/go-board` that manages the current board state and current player turn. Export a `createGameState(size)` function returning `{ board: Board, currentPlayer: 1 | -1, makeMove(vertex): boolean, pass(): void, getSignMap(): number[][] }`. Use `Board.fromDimensions(size, size)` to create an empty board. `makeMove` calls `board.makeMove(sign, vertex, { preventOverwrite: true, preventSuicide: true, preventKo: true })` — NOTE parameter order is `(sign, vertex[, options])` NOT `(vertex, sign)`. By default go-board does NOT reject illegal moves; you MUST pass the `prevent*` options. When a move is illegal, `makeMove` THROWS an Error (not returns `null`), so wrap in try/catch — if it throws, return `false` (move rejected); if it succeeds, reassign `board = newBoard`, flip `currentPlayer`, return `true`. `pass()` just flips `currentPlayer` without placing. Wire `Board.tsx`'s `onVertexClick` to call `makeMove` and update the signMap. If `makeMove` returns `false`, the UI layer (Board.tsx) should flash a brief red border on the board container for 200ms (this is UI behavior, not game logic). After each legal move, update the Shudan `signMap` prop to trigger re-render.
   Must NOT do: Do NOT implement undo/redo (T4). Do NOT implement SGF I/O (T5). Do NOT implement superko — `preventKo: true` handles simple ko only. Do NOT implement scoring. Do NOT put the red-border UI flash in gameState.ts — keep gameState pure logic, put the flash in Board.tsx.
   Parallelization: Wave 2 | Blocked by: T1, T2 | Blocks: T4, T6, T7
@@ -164,7 +164,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure (occupied): Clicking on an existing stone does nothing — `makeMove` throws due to `preventOverwrite`, gameState returns `false`. `test('occupied intersection rejected', () => { ... })`. Evidence: `.omo/evidence/task-3-baduk-mvp-occupied-test.txt`.
   Commit: Y | feat(rules): integrate go-board for captures, ko, pass, stone placement
 
-- [ ] 4. Game tree: move history with @sabaki/immutable-gametree for undo/redo
+- [x] 4. Game tree: move history with @sabaki/immutable-gametree for undo/redo
   What to do: Create `src/lib/gameTree.ts` — a module wrapping `@sabaki/immutable-gametree` that records every move (including passes) as a node in a game tree. Export `createGameTree(size)`, `appendMove(tree, vertex, sign): GameTree`, `appendPass(tree, sign): GameTree`, `undo(tree): GameTree | null`, `redo(tree): GameTree | null`, `getCurrentSignMap(tree, size): number[][]`, `getMoveList(tree): { vertex: [number, number] | 'pass', sign: number }[]`. The tree stores moves as SGF-style nodes with `B[x]` / `W[x]` properties. `undo` navigates to the previous node; `redo` navigates to the next. `getCurrentSignMap` replays all moves from root to current node to produce the board state. Update `gameState.ts` (from T3) to also append to the game tree on each move. Add `undo()` and `redo()` functions to the game state module.
   Must NOT do: Do NOT implement variation branching in the UI — linear trunk only. Do NOT show a game tree graph sidebar. Do NOT implement SGF serialization (T5). The tree supports branching but the UI uses the trunk only.
   Parallelization: Wave 3 | Blocked by: T1, T3 | Blocks: T5, T6, T7
@@ -188,7 +188,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: Undo from root (no moves) returns null / does nothing. `test('undo at root is no-op', () => { ... })`. Evidence: `.omo/evidence/task-4-baduk-mvp-undo-root-test.txt`.
   Commit: Y | feat(history): integrate immutable-gametree for undo/redo move navigation
 
-- [ ] 5. SGF I/O: save and load game records in FF[4] format
+- [x] 5. SGF I/O: save and load game records in FF[4] format
   What to do: Create `src/lib/sgfIo.ts` — a module using `@sabaki/sgf` to serialize and parse SGF files. Export `treeToSGF(tree: GameTree): string` and `sgfToTree(sgf: string): GameTree`. `treeToSGF` uses `@sabaki/sgf`'s `stringify([tree.root])` to produce FF[4] compliant text — CRITICAL: `stringify` takes an array of root node objects (`NodeObject[]`), NOT a GameTree. Pass `[tree.root]` not `tree`. Export `downloadSGF(tree, filename)` — creates a Blob, uses `URL.createObjectURL`, triggers an `<a>` download. Export `loadSGFFile(file: File): Promise<GameTree>` — reads file text, parses with `@sabaki/sgf`'s `parse()` which returns `NodeObject[]` (root nodes, NOT GameTree[]). You must wrap the first root node in `new GameTree({ getId, root: parsedNodes[0] })` to get a GameTree. After parsing, when loading an SGF with a different board size, set the board size from the SGF `SZ` property and update the board-size `<select>` to reflect the loaded size. Wire into the UI: a "Save SGF" button and a "Load SGF" file input (`<input type="file" accept=".sgf">`).
   Must NOT do: Do NOT support SGF setups (AB/AW/AE) — only move records. Do NOT support SGF annotations/comments (C, LB, TR, etc.) — phase 2. Do NOT support multiple games in one SGF — first parsed root node only.
   Parallelization: Wave 4 | Blocked by: T4 | Blocks: T6, T7
@@ -218,7 +218,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: Load a non-SGF file (e.g., `hello world`) — `parse` should throw or return empty. `test('non-SGF content rejected', () => { ... })`. Evidence: `.omo/evidence/task-5-baduk-mvp-sgf-nonsgf-test.txt`.
   Commit: Y | feat(sgf): save and load game records in SGF FF[4] format
 
-- [ ] 6. UI control bar: new game, pass, undo, redo, coordinates toggle
+- [x] 6. UI control bar: new game, pass, undo, redo, coordinates toggle
   What to do: Create `src/components/ControlBar.tsx` — a horizontal bar above the board with buttons: "New Game" (resets to empty board, keeps current size), "Pass" (calls `pass()`), "Undo" (calls `undo()`), "Redo" (calls `redo()`), "Save SGF" (calls `downloadSGF`), "Load SGF" (file input), and a "Coordinates" toggle checkbox (toggles Shudan's `showCoordinates` prop). Also add a "Board Size" `<select>` with options 9, 13, 19 (moved from the temporary dropdown in T2). Add a "Move N" display showing the current move number. Add a "To Play: Black/White" indicator showing whose turn it is. Disable "Undo" when at root, disable "Redo" when at leaf. Wire all buttons to the game state module from T3+T4. Use CSS for a clean, minimal layout — flexbox row, gap, buttons with padding, a dark background to make the wood board pop.
   Must NOT do: Do NOT add timer/clock UI. Do NOT add score display. Do NOT add settings panel. Do NOT add board theme picker. Do NOT add variation/branch switcher. Keep it minimal.
   Parallelization: Wave 5 | Blocked by: T2, T3, T4, T5 | Blocks: T8 | Can parallelize with: T7
@@ -239,7 +239,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: At game start (root), "Undo" button should be disabled (opacity 0.5). Playwright `page.locator('button:has-text("Undo")').isDisabled()` returns true. Evidence: `.omo/evidence/task-6-baduk-mvp-undo-disabled.txt`.
   Commit: Y | feat(ui): control bar with new game, pass, undo, redo, sgf, coordinates
 
-- [ ] 7. Unit tests: Vitest game logic test suite
+- [x] 7. Unit tests: Vitest game logic test suite
   What to do: Create `src/lib/__tests__/gameState.test.ts` — comprehensive Vitest test suite for the game logic. Test cases: (a) place stone on empty intersection → appears on board, (b) place on occupied → rejected, (c) place on another stone's liberty → no capture, (d) fill all liberties of a group → group captured, (e) multi-stone group capture, (f) simple ko: setup cross-capture → immediate recapture rejected, (g) suicide move rejected, (h) pass flips turn without placing, (i) board size 9/13/19 initializes correctly, (j) undo restores previous state, (k) redo after undo restores, (l) undo at root is no-op, (m) SGF round-trip: play moves → save → load → board matches, (n) SGF parse malformed input → handles gracefully. Add `vitest.config.ts` with `environment: 'jsdom'` and `setupFiles: ['./src/test-setup.ts']` (imports `@testing-library/preact`). Configure `bun run test` to run Vitest in watch mode and `bun run test:run` for CI (single run).
   Must NOT do: Do NOT test Shudan rendering (that's E2E in T8). Do NOT test UI components. Do NOT use Playwright here — pure Vitest only. Do NOT mock go-board or immutable-gametree — test through real libraries.
   Parallelization: Wave 6 | Blocked by: T3, T4, T5 | Blocks: nothing | Can parallelize with: T8
@@ -259,7 +259,7 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
     - Failure: Intentionally break one assertion (e.g., assert capture does NOT happen when it should) — verify Vitest exits with non-zero. `bun run test:run 2>&1 | grep -q "FAIL"` should succeed. Evidence: `.omo/evidence/task-7-baduk-mvp-test-failure.txt`.
   Commit: Y | test(unit): vitest suite for captures, ko, undo/redo, sgf round-trip
 
-- [ ] 8. E2E tests: Playwright board interaction and SGF round-trip
+- [x] 8. E2E tests: Playwright board interaction and SGF round-trip
   What to do: Create `e2e/board.spec.ts` — Playwright test file testing the full user flow. Create a fixture `e2e/fixtures/test-game.sgf` with a known 5-move game on a 19x19 board (e.g., `(;FF[4]GM[1]SZ[19];B[pd];W[dc];B[ce];W[ed];B[de])`). Test scenarios: (a) Load page → see empty board with grid and coordinates, (b) Change board size to 13 → verify 13x13 grid renders, (c) Click intersection → see stone appear, (d) Click adjacent intersections to capture a stone → verify stone disappears, (e) Click Undo → verify last stone removed, (f) Click Redo → verify stone restored, (g) Click Pass → verify turn indicator flips, (h) Save SGF → verify file download, (i) Load SGF → verify board restored, (j) Toggle coordinates → verify labels disappear/reappear, (k) Attempt to place on occupied → verify no second stone. Create `playwright.config.ts` with `webServer` config that auto-starts `bun run dev` on port 5173. Add `bun run e2e` script to `package.json`.
   Must NOT do: Do NOT test unit-level game logic (that's T7). Do NOT test AI integration (phase 2). Do NOT test desktop packaging (phase 2). Do NOT use headed mode in CI — use `headless: true`.
   Parallelization: Wave 6 | Blocked by: T6 | Blocks: nothing | Can parallelize with: T7
@@ -281,13 +281,13 @@ Your next move: `/start-work`로 실행을 시작, 또는 변경 요청. Full ex
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   Acceptance: Compare each todo's commit against the plan. `git log --oneline` shows commits for all 8 todos. Each commit message matches the planned `<type>(<scope>): <summary>` format. No extra files outside the planned scope. Evidence: `.omo/evidence/f1-compliance.txt` (git log + diff stat).
-- [ ] F2. Code quality review
+- [x] F2. Code quality review
   Acceptance: `bunx tsc --noEmit` exits 0. `grep -rn ': any' src/ --include='*.ts' --include='*.tsx' | grep -v node_modules` returns 0 hits (no `any` types). `grep -rn 'console\.log\|debugger' src/ --include='*.ts' --include='*.tsx' | grep -v __tests__ | grep -v node_modules` returns 0 hits (no debug logs in production code). Evidence: `.omo/evidence/f2-quality.txt`.
-- [ ] F3. Automated full-flow QA
+- [x] F3. Automated full-flow QA
   Acceptance: `bun run e2e` exits 0 with all ≥11 tests passing. `bun run test:run` exits 0 with all ≥14 tests passing. Playwright HTML report at `e2e-report/index.html`. No human interaction needed — all tests are automated. Evidence: `.omo/evidence/f3-e2e-report.txt` + `e2e-report/index.html`.
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   Acceptance: `grep -rliE 'katago|gtp|leela|tauri|electron|wails|websocket|socket\.io|byo.?yomi|fischer|handicap|superko|scoring' src/ --include='*.ts' --include='*.tsx' | grep -v node_modules` returns 0 hits. No AI integration, no desktop wrapper, no online features, no scoring features present in the codebase. Evidence: `.omo/evidence/f4-scope.txt`.
 
 ## Commit strategy
