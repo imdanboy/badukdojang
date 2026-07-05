@@ -9,5 +9,6 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules', 'dist', 'e2e/**'],
     css: true,
+    setupFiles: ['./src/test-setup.ts'],
   },
 })
