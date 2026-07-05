@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "active_work_id": "baduk-mvp-193d7a36",
+  "works": {
+    "baduk-mvp-193d7a36": {
+      "work_id": "baduk-mvp-193d7a36",
+      "active_plan": "/Users/jinbei/Projects/baduk/badukdojang/.omo/plans/baduk-mvp.md",
+      "plan_name": "baduk-mvp",
+      "status": "active",
+      "started_at": "2026-07-05T03:53:29.208Z",
+      "updated_at": "2026-07-05T03:53:29.208Z",
+      "session_ids": [
+        "opencode:ses_0cf9718dcffeWqyQbQTpiYuW5w"
+      ],
+      "session_origins": {
+        "opencode:ses_0cf9718dcffeWqyQbQTpiYuW5w": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {}
+    }
+  },
+  "active_plan": "/Users/jinbei/Projects/baduk/badukdojang/.omo/plans/baduk-mvp.md",
+  "started_at": "2026-07-05T03:53:29.208Z",
+  "status": "active",
+  "updated_at": "2026-07-05T03:53:29.208Z",
+  "session_ids": [
+    "opencode:ses_0cf9718dcffeWqyQbQTpiYuW5w"
+  ],
+  "session_origins": {
+    "opencode:ses_0cf9718dcffeWqyQbQTpiYuW5w": "direct"
+  },
+  "plan_name": "baduk-mvp",
+  "task_sessions": {},
+  "agent": "atlas"
+}

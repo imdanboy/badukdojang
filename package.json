@@ -1,0 +1,32 @@
+{
+  "name": "badukdojang",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+  },
+  "dependencies": {
+    "@sabaki/go-board": "^1.4.1",
+    "@sabaki/immutable-gametree": "^1.9.4",
+    "@sabaki/sgf": "^3.4.7",
+    "@sabaki/shudan": "^1.7.1",
+    "preact": "^10.29.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@preact/preset-vite": "^2.10.5",
+    "@testing-library/preact": "^3.2.4",
+    "@types/node": "^24.13.2",
+    "@vitest/coverage-v8": "^4.1.9",
+    "jsdom": "^29.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.9"
+  }
+}
