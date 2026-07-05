@@ -50,6 +50,21 @@ export function App() {
 
   const handlePass = () => {
     gameState.pass()
+    setSignMap(gameState.getSignMap())
+  }
+
+  const handleUndo = () => {
+    const success = gameState.undo()
+    if (success) {
+      setSignMap(gameState.getSignMap())
+    }
+  }
+
+  const handleRedo = () => {
+    const success = gameState.redo()
+    if (success) {
+      setSignMap(gameState.getSignMap())
+    }
   }
 
   return (
@@ -94,16 +109,38 @@ export function App() {
         onVertexClick={handleVertexClick}
         flashTrigger={flashTrigger}
       />
-      <button
-        onClick={handlePass}
-        style={{
-          padding: '0.5rem 1rem',
-          fontSize: '0.875rem',
-          cursor: 'pointer',
-        }}
-      >
-        Pass
-      </button>
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button
+          onClick={handleUndo}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Undo
+        </button>
+        <button
+          onClick={handlePass}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Pass
+        </button>
+        <button
+          onClick={handleRedo}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Redo
+        </button>
+      </div>
     </div>
   )
 }

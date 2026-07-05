@@ -91,3 +91,98 @@
 - `src/App.tsx` — Board size state (9|13|19), `<select>` dropdown, go-board instance management, `lastMove` tracking, `markerMap` construction
 - `src/main.tsx` — Added `import '@sabaki/shudan/css/goban.css'` (critical for board rendering)
 - `scripts/screenshot-t2.ts` — Playwright screenshot helper for T2 visual evidence
+
+## 2026-07-05T13:10:00Z - T3: Game Rules Integration
+
+### GameState Module
+- Created `src/lib/gameState.ts` wrapping `@sabaki/go-board` with turn management and rule enforcement.
+- `createGameState(size)` returns `{ board, currentPlayer, lastMove, makeMove, pass, getSignMap }`.
+- `makeMove` uses `board.makeMove(sign, vertex, { preventOverwrite: true, preventSuicide: true, preventKo: true })` — parameter order is `(sign, vertex)` NOT `(vertex, sign)`.
+- `makeMove` THROWS on illegal moves (not returns null), so it MUST be wrapped in try/catch.
+- On success: reassign `board = newBoard`, flip `currentPlayer` (1 ↔ -1), update `lastMove`, return `true`.
+- On failure: return `false` — UI layer (Board.tsx) flashes red border for 200ms.
+- `pass()` flips `currentPlayer` without placing a stone.
+- `getSignMap()` returns `board.signMap` typed as `SignMap` (not `number[][]`) to satisfy Shudan's strict `Map<0 | 1 | -1>` type.
+
+### UI Integration
+- App.tsx replaced direct go-board management with `createGameState`.
+- `signMap` state is now driven by `gameState.getSignMap()` after each successful move.
+- `markerMap` is built from `gameState.lastMove` instead of a separate `lastMove` state.
+- Board.tsx receives `flashTrigger` prop — increments on illegal move, triggers `flashError` state for 200ms red border via `useEffect` + `setTimeout`.
+- Pass button added below the board.
+
+### TypeScript Strictness
+- `exactOptionalPropertyTypes` is enabled — optional props must use `| undefined` explicitly, not just `?`.
+- `noUncheckedIndexedAccess` is enabled — array access like `signMap[y][x]` requires non-null assertion `signMap[y]![x]` in tests.
+- `SignMap` type from `@sabaki/go-board` is `(0 | 1 | -1)[][]`, which satisfies Shudan's `Map<0 | 1 | -1>`.
+
+### Test Results
+- `bun run test`: 7/7 passed.
+- `bunx tsc --noEmit -p tsconfig.app.json`: 0 errors.
+- Capture test: corner setup (B at 1,0; W at 0,0; B at 0,1) captures white stone at (0,0).
+- Ko test: cross-capture setup prevents immediate recapture.
+- Suicide test: corner setup with white surrounded by black rejects suicide at (0,0).
+- Occupied test: clicking existing stone returns false, board unchanged.
+
+### T3 File Manifest
+- `src/lib/gameState.ts` — Game state wrapper with turn management, captures, ko, suicide, pass
+- `src/lib/gameState.test.ts` — Unit tests for capture, ko, suicide, occupied, pass
+- `src/App.tsx` — Wired to gameState, pass button, flashTrigger for illegal moves
+- `src/components/Board.tsx` — Red border flash on illegal move via flashTrigger prop
+- `.omo/evidence/task-3-baduk-mvp.png` — Screenshot showing stones placed and Pass button
+- `.omo/evidence/task-3-baduk-mvp-capture-test.txt` — capture test evidence
+- `.omo/evidence/task-3-baduk-mvp-ko-test.txt` — ko test evidence
+- `.omo/evidence/task-3-baduk-mvp-suicide-test.txt` — suicide test evidence
+- `.omo/evidence/task-3-baduk-mvp-occupied-test.txt` — occupied test evidence
+
+## 2026-07-05T13:15:00Z - T4: Game Tree & History Navigation
+
+### Immutable GameTree Integration
+- `@sabaki/immutable-gametree` uses **CommonJS default export** (`module.exports = GameTree`), NOT named export. Runtime fails with `SyntaxError: Export named 'GameTree' not found` if you try `import { GameTree } from '@sabaki/immutable-gametree'`. Must use `import GameTree from '@sabaki/immutable-gametree'`.
+- Created `src/types/immutable-gametree.d.ts` to provide TypeScript declarations for the CJS-only package. Declares both `export class GameTree` and `export default GameTree` so TypeScript accepts both import styles.
+- `tree.mutate(mutator)` returns a **new** GameTree instance. If the mutator makes no changes, it returns `this` (same instance). This means you cannot use `mutate` to create a clone for undo/redo — need `JSON.parse(JSON.stringify(tree.root))` or similar.
+- `tree.navigate(id, step, currents)` returns the node at the new position. `step=-1` goes to parent, `step=1` goes to first child. Returns `null` if no such node.
+- `tree.listNodesVertically(startId, -1, {})` walks UP from startId to root. `.reverse()` gives root-to-current path for replay.
+- There is **NO** `getCurrent()` method. You must track the current node ID yourself. We store it as `tree.currentId` via module augmentation.
+
+### GameTree Module Design
+- `createGameTree(size)` creates a tree with a root node `{ id: 'root', data: {}, parentId: null, children: [] }`.
+- `appendMove(tree, vertex, sign)` appends a child node with SGF property `B[xy]` or `W[xy]`. SGF coords: lowercase letters, `'a'=0`.
+- `appendPass(tree, sign)` appends a child node with empty property `B[]` or `W[]`.
+- `undo(tree)` / `redo(tree)` clone the tree (to preserve immutability of the original reference) and update `currentId` on the clone.
+- `getCurrentSignMap(tree, size)` replays all moves from root to current node through `go-board` to derive the board state. Uses `preventSuicide: false, preventKo: false` because moves were already validated when played.
+- `getMoveList(tree)` returns the sequence of moves from root to current, with `'pass'` for pass moves.
+
+### GameState Integration
+- Added `gameTree: GameTree` to GameState interface.
+- `makeMove` appends to the tree on success.
+- `pass` appends a pass node to the tree.
+- `undo()` / `redo()` update the tree, then call `syncFromTree()` to reconstruct the board from the tree's move list.
+- `deriveCurrentPlayer()` and `deriveLastMove()` compute state from the tree's move list instead of tracking separately. This ensures consistency after undo/redo.
+- `lastMove` after a pass: remains the last placed stone (not null), because passes don't have a vertex.
+
+### UI Integration
+- App.tsx added `handleUndo` and `handleRedo` functions that call `gameState.undo()` / `gameState.redo()` and update `signMap` state.
+- Undo/Redo/Pass buttons arranged in a horizontal flex row below the board.
+- Board size change still recreates the game state (and thus the tree) from scratch.
+
+### TypeScript Strictness
+- `exactOptionalPropertyTypes`: optional props must use `| undefined` explicitly.
+- `noUncheckedIndexedAccess`: array access requires non-null assertion `arr[i]!`.
+- Module augmentation for `GameTree.currentId` works via `declare module '@sabaki/immutable-gametree' { interface GameTree { currentId?: ... } }`.
+
+### Test Results
+- `bun run test`: 26/26 passed (14 gameTree + 12 gameState).
+- `bunx tsc --noEmit -p tsconfig.app.json`: 0 errors.
+- QA scenarios verified: undo restores state, redo restores state, undo at root is no-op, undo + new move creates branch, captures replay correctly after undo/redo.
+
+### T4 File Manifest
+- `src/lib/gameTree.ts` — Immutable game tree wrapper with SGF-style move storage, undo/redo, board replay, move list
+- `src/lib/gameTree.test.ts` — 14 tests covering create, appendMove, appendPass, undo, redo, getCurrentSignMap, getMoveList, branching
+- `src/lib/gameState.ts` — Integrated gameTree with undo/redo, syncFromTree, deriveCurrentPlayer, deriveLastMove
+- `src/lib/gameState.test.ts` — 12 tests including 5 new undo/redo/capture tests
+- `src/App.tsx` — Undo/Redo buttons wired to gameState
+- `src/types/immutable-gametree.d.ts` — TypeScript declarations for CJS-only package
+- `.omo/evidence/task-4-baduk-mvp-undo-test.txt` — undo QA evidence
+- `.omo/evidence/task-4-baduk-mvp-redo-test.txt` — redo QA evidence
+- `.omo/evidence/task-4-baduk-mvp-undo-root-test.txt` — undo-at-root QA evidence

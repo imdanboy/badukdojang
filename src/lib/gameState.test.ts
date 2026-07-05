@@ -95,4 +95,91 @@ describe('gameState', () => {
       Array.from({ length: 9 }, () => Array(9).fill(0)),
     )
   })
+
+  test('undo restores previous board state', () => {
+    const gs = createGameState(9)
+    gs.makeMove([3, 3])
+    gs.makeMove([4, 4])
+    gs.makeMove([5, 5])
+
+    expect(gs.getSignMap()[3]![3]).toBe(1)
+    expect(gs.getSignMap()[4]![4]).toBe(-1)
+    expect(gs.getSignMap()[5]![5]).toBe(1)
+    expect(gs.currentPlayer).toBe(-1)
+
+    const result = gs.undo()
+    expect(result).toBe(true)
+    expect(gs.getSignMap()[3]![3]).toBe(1)
+    expect(gs.getSignMap()[4]![4]).toBe(-1)
+    expect(gs.getSignMap()[5]![5]).toBe(0)
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toEqual([4, 4])
+  })
+
+  test('redo restores next board state', () => {
+    const gs = createGameState(9)
+    gs.makeMove([3, 3])
+    gs.makeMove([4, 4])
+    gs.makeMove([5, 5])
+
+    gs.undo()
+    expect(gs.getSignMap()[5]![5]).toBe(0)
+
+    const result = gs.redo()
+    expect(result).toBe(true)
+    expect(gs.getSignMap()[3]![3]).toBe(1)
+    expect(gs.getSignMap()[4]![4]).toBe(-1)
+    expect(gs.getSignMap()[5]![5]).toBe(1)
+    expect(gs.currentPlayer).toBe(-1)
+    expect(gs.lastMove).toEqual([5, 5])
+  })
+
+  test('undo at root is no-op', () => {
+    const gs = createGameState(9)
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toBeNull()
+
+    const result = gs.undo()
+    expect(result).toBe(false)
+    expect(gs.getSignMap()).toEqual(
+      Array.from({ length: 9 }, () => Array(9).fill(0)),
+    )
+    expect(gs.currentPlayer).toBe(1)
+  })
+
+  test('undo after pass restores correct state', () => {
+    const gs = createGameState(9)
+    gs.makeMove([3, 3])
+    gs.pass()
+
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toEqual([3, 3])
+
+    gs.undo()
+    expect(gs.currentPlayer).toBe(-1)
+    expect(gs.lastMove).toEqual([3, 3])
+
+    gs.undo()
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toBeNull()
+  })
+
+  test('undo and redo with captures', () => {
+    const gs = createGameState(9)
+    // Corner capture: B at (1,0), W at (0,0), B at (0,1) captures W
+    gs.makeMove([1, 0])
+    gs.makeMove([0, 0])
+    gs.makeMove([0, 1])
+
+    expect(gs.getSignMap()[0]![0]).toBe(0)
+
+    gs.undo()
+    expect(gs.getSignMap()[0]![0]).toBe(-1)
+    expect(gs.getSignMap()[0]![1]).toBe(1)
+
+    gs.redo()
+    expect(gs.getSignMap()[0]![0]).toBe(0)
+    expect(gs.getSignMap()[0]![1]).toBe(1)
+    expect(gs.getSignMap()[1]![0]).toBe(1)
+  })
 })
