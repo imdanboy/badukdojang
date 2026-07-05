@@ -3,11 +3,16 @@
  * Board size selector (9/13/19) + Shudan Goban rendering + go-board game logic.
  * Clicking an empty intersection places a stone. Illegal moves flash red border.
  */
-import { useEffect, useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { SignMap } from '@sabaki/go-board'
 import type { Map, Marker, Vertex } from '@sabaki/shudan'
 import { Board } from './components/Board.tsx'
 import { createGameState } from './lib/gameState.ts'
+import {
+  downloadSGF,
+  getBoardSizeFromTree,
+  loadSGFFile,
+} from './lib/sgfIo.ts'
 
 type BoardSize = 9 | 13 | 19
 
@@ -16,6 +21,7 @@ export function App() {
   const [gameState, setGameState] = useState(() => createGameState(19))
   const [signMap, setSignMap] = useState<SignMap>(() => gameState.getSignMap())
   const [flashTrigger, setFlashTrigger] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Re-initialize game state whenever the size changes.
   useEffect(() => {
@@ -64,6 +70,41 @@ export function App() {
     const success = gameState.redo()
     if (success) {
       setSignMap(gameState.getSignMap())
+    }
+  }
+
+  const handleSaveSGF = () => {
+    const filename = `game-${Date.now()}.sgf`
+    downloadSGF(gameState.gameTree, filename, boardSize)
+  }
+
+  const handleLoadSGFClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+
+    try {
+      const loadedTree = await loadSGFFile(file)
+      const loadedSize = getBoardSizeFromTree(loadedTree)
+      const validSize: BoardSize = [9, 13, 19].includes(loadedSize)
+        ? (loadedSize as BoardSize)
+        : 19
+
+      if (validSize !== boardSize) {
+        setBoardSize(validSize)
+      }
+
+      const newGameState = createGameState(validSize, loadedTree)
+      setGameState(newGameState)
+      setSignMap(newGameState.getSignMap())
+    } catch (error) {
+      console.error('Failed to load SGF:', error)
+    } finally {
+      input.value = ''
     }
   }
 
@@ -140,6 +181,33 @@ export function App() {
         >
           Redo
         </button>
+        <button
+          onClick={handleSaveSGF}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Save SGF
+        </button>
+        <button
+          onClick={handleLoadSGFClick}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Load SGF
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".sgf,text/plain"
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
       </div>
     </div>
   )

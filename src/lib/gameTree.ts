@@ -117,9 +117,9 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
     if (node.id === tree.root.id) continue
 
     const sign =
-      node.data.B != null && node.data.B.length > 0
+      node.data.B != null && node.data.B.length > 0 && node.data.B[0] !== ''
         ? 1
-        : node.data.W != null && node.data.W.length > 0
+        : node.data.W != null && node.data.W.length > 0 && node.data.W[0] !== ''
           ? -1
           : 0
 
@@ -129,7 +129,7 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
     }
 
     const prop = sign === 1 ? node.data.B : node.data.W
-    if (prop == null || prop.length === 0) {
+    if (prop == null || prop.length === 0 || prop[0] === '') {
       // Pass — no board change
       continue
     }
@@ -165,14 +165,14 @@ export function getMoveList(
 
     if (node.data.B != null) {
       const prop = node.data.B
-      if (prop.length === 0) {
+      if (prop.length === 0 || prop[0] === '') {
         moves.push({ vertex: 'pass', sign: 1 })
       } else {
         moves.push({ vertex: sgfToVertex(prop[0] as string), sign: 1 })
       }
     } else if (node.data.W != null) {
       const prop = node.data.W
-      if (prop.length === 0) {
+      if (prop.length === 0 || prop[0] === '') {
         moves.push({ vertex: 'pass', sign: -1 })
       } else {
         moves.push({ vertex: sgfToVertex(prop[0] as string), sign: -1 })

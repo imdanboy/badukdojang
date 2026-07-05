@@ -25,9 +25,9 @@ export interface GameState {
   redo(): boolean
 }
 
-export function createGameState(size: number): GameState {
+export function createGameState(size: number, initialTree?: GameTree): GameState {
   let board = GoBoard.fromDimensions(size, size)
-  let gameTree = createGameTree(size)
+  let gameTree = initialTree ?? createGameTree(size)
   let currentPlayer: Player = 1
   let lastMove: Vertex | null = null
 
@@ -50,6 +50,12 @@ export function createGameState(size: number): GameState {
   function deriveCurrentPlayer(): Player {
     const moves = getMoveList(gameTree)
     return moves.length % 2 === 0 ? 1 : -1
+  }
+
+  if (initialTree) {
+    syncFromTree()
+    lastMove = deriveLastMove()
+    currentPlayer = deriveCurrentPlayer()
   }
 
   function makeMove(vertex: Vertex): boolean {
