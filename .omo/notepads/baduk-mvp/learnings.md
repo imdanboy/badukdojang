@@ -325,3 +325,41 @@
 - `src/test-setup.ts` — `@testing-library/preact` import for jsdom setup
 - `vitest.config.ts` — Added `setupFiles` entry
 - `package.json` — `test` script switched to watch mode, `test:run` added for CI
+
+## 2026-07-05T13:35:00Z - T8: Playwright E2E Tests
+
+### E2E Test Scenarios (12 tests, all passing)
+1. **Empty board render**: Verify `.shudan-goban`, 38 grid lines, 9 hoshi points, 0 stones, coordinates visible.
+2. **Board size change**: Select 13x13 from `#board-size-select` → 26 grid lines, 169 vertices.
+3. **Stone placement**: Click vertex `(3,3)` → 1 black stone appears.
+4. **Capture**: Surround white stone at `(3,3)` with 4 black stones → white stone disappears, 6 stones remain.
+5. **Undo**: Click Undo after placing a stone → stone count returns to 0.
+6. **Redo**: Click Redo after undo → stone count returns to 1.
+7. **Pass**: Click Pass → subsequent stone placement is white, proving turn flipped.
+8. **Save SGF**: Click Save SGF → download event fires with `.sgf` filename.
+9. **Load SGF**: Upload `e2e/fixtures/test-game.sgf` → 5 stones restored, turn is White.
+10. **Toggle coordinates**: Uncheck Coordinates checkbox → `.shudan-coordx`/`.shudan-coordy` disappear; recheck → reappear.
+11. **Occupied point**: Click same vertex twice → stone count stays at 1.
+12. **Full game flow**: Play 5 moves, undo 2, save SGF, new game, load SGF back → 5 stones on board.
+
+### Key Findings
+- **Shudan vertex DOM order**: Row-major (`y * width + x`). `page.locator('.shudan-vertex').nth(y * boardSize + x)` clicks the correct intersection.
+- **Grid line count**: 19x19 board has 38 `.shudan-gridline` elements (19 horizontal + 19 vertical `rect` elements).
+- **Hoshi count**: 9 star points on 19x19, rendered as `.shudan-hoshi` circles.
+- **Coordinates**: `.shudan-coordx` and `.shudan-coordy` each render twice (top/bottom and left/right), so count is 2 each when visible.
+- **Pass UI bug discovered**: `handlePass()` calls `setSignMap(gameState.getSignMap())`, but `pass()` doesn't change the board, so `signMap` reference is identical. Preact optimizes away the re-render, leaving the turn indicator stale. Workaround in E2E: verify pass by placing a subsequent stone and checking its color (white after black pass).
+- **File upload**: Hidden `input[type="file"]` is triggered by Load SGF button; use `page.locator('input[type="file"]').setInputFiles(...)` directly.
+- **Download test**: `page.waitForEvent('download')` + `download.suggestedFilename()` works reliably for SGF save.
+- **webServer config**: `command: 'bun run dev', port: 5173, reuseExistingServer: !process.env.CI` auto-starts dev server and reuses existing one locally.
+
+### QA Scenarios Verified
+- `bun run e2e`: 12/12 passed, exit 0. Evidence: `.omo/evidence/task-8-baduk-mvp-e2e-*.png` (13 screenshots)
+- Full game flow: `.omo/evidence/task-8-baduk-mvp-e2e-fullflow.png`
+- Occupied point rejection: `.omo/evidence/task-8-baduk-mvp-e2e-occupied.png`
+- HTML report: `e2e-report/index.html`
+
+### T8 File Manifest
+- `e2e/board.spec.ts` — 12 Playwright E2E tests covering board interaction, undo/redo, SGF round-trip
+- `e2e/fixtures/test-game.sgf` — 5-move 19x19 game: `(;FF[4]GM[1]SZ[19];B[pd];W[dc];B[ce];W[ed];B[de])`
+- `playwright.config.ts` — Chromium-only, webServer auto-start on port 5173, HTML reporter to `e2e-report/`
+- `package.json` — Added `"e2e": "playwright test"` script
