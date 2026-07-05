@@ -54,3 +54,40 @@
 - No test files exist yet; T1 verification just confirms Vitest runs cleanly. T2 will add `src/lib/board.test.ts`.
 - No `@sabaki/*` imports yet; only installed. T2 wires Shudan into the container.
 - Vitest config has no `setupFiles`; T2+ may need `@testing-library/preact` cleanup hook.
+
+## 2026-07-05T13:05:00Z - T2: Interactive Goban Rendering
+
+### Critical Import Gotcha
+- `@sabaki/go-board` uses `module.exports = GoBoard` (CommonJS default export). Must use `import GoBoard from '@sabaki/go-board'` (default import), NOT `import { Board } from '@sabaki/go-board'` (named import). Named import returns `undefined`, causing `Cannot read properties of undefined (reading 'fromDimensions')` at runtime. TSC does NOT catch this because the `.d.ts` declares `export default GoBoard` — the mismatch is between the runtime CJS module and the ESM type declarations. Vite's CJS-to-ESM interop resolves the default export correctly.
+- `@sabaki/shudan` exports `Goban` as a named export: `import { Goban } from '@sabaki/shudan'`. This works fine.
+
+### Shudan API Details
+- `signMap` and `markerMap` are both indexed `[y][x]` (rows of columns), confirmed by reading `Goban.js` source: `signMap?.[y]?.[x]` and `markerMap?.[y]?.[x]`.
+- `markerMap` type is `Map<Marker | null>` = `(Marker | null)[][]`. To place a point marker at vertex `[x, y]`: set `markerMap[y][x] = { type: 'point' }`.
+- `vertexSize` must be a number (pixels). Shudan uses it as `fontSize` for the CSS grid template. CSS-based sizing does NOT work — Shudan calculates internal layout from this number.
+- `fuzzyStonePlacement` and `animateStonePlacement` must both be `true` for stone placement animation to work. Animation is handled in `componentDidUpdate` and only triggers when `fuzzyStonePlacement` is also enabled.
+- `showCoordinates` adds coordinate labels on all four edges (A-S skipping I, 1-19).
+- Shudan CSS (`@sabaki/shudan/css/goban.css`) is CRITICAL — without it, the board renders as unstyled divs with no grid lines, star points, or wooden background.
+
+### ResizeObserver Pattern
+- Container ref + `ResizeObserver` → `setContainerWidth(entry.contentRect.width)` → `vertexSize = Math.floor(containerWidth / boardSize)`.
+- Initial `containerWidth` is 0 until first ResizeObserver callback; fall back to `24` (Shudan's own default) to avoid a zero-size flash.
+- `maxWidth: 600px` on the container caps the board size on large viewports.
+
+### Board Size Switching
+- `useEffect` with `[boardSize]` dependency recreates the board via `GoBoard.fromDimensions(boardSize, boardSize)` and clears `lastMove`.
+- The `<select>` uses `value={String(boardSize)}` and `onChange` parses the number back. Preact's `onChange` fires on `<select>` change correctly.
+
+### Verification Results
+- `bunx tsc --noEmit` exits 0 (zero type errors).
+- `bun run dev` serves HTML at `http://localhost:5173` with `<div id="app">`.
+- Playwright screenshots confirm: 19x19, 13x13, and 9x9 boards all render with grid lines, star points (hoshi), and coordinate labels (A-S/1-19, A-N/1-13, A-J/1-9, all skipping I per Go convention).
+- Click on 13x13 center intersection logs `[6, 6]` to console.
+- Goban bounding box (744x744 at x:268,y:96) is fully contained within app root (1280x856).
+- Evidence: `.omo/evidence/task-2-baduk-mvp-19x19.png`, `task-2-baduk-mvp-13x13.png`, `task-2-baduk-mvp-9x9.png`, `task-2-baduk-mvp-edgeclick.txt`.
+
+### T2 File Manifest
+- `src/components/Board.tsx` — Preact component wrapping Shudan `<Goban>` with ResizeObserver-based `vertexSize` calculation
+- `src/App.tsx` — Board size state (9|13|19), `<select>` dropdown, go-board instance management, `lastMove` tracking, `markerMap` construction
+- `src/main.tsx` — Added `import '@sabaki/shudan/css/goban.css'` (critical for board rendering)
+- `scripts/screenshot-t2.ts` — Playwright screenshot helper for T2 visual evidence

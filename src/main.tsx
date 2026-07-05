@@ -1,4 +1,5 @@
 import { render } from 'preact'
+import '@sabaki/shudan/css/goban.css'
 import './index.css'
 import { App } from './App.tsx'
 
