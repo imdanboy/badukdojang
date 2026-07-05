@@ -186,3 +186,142 @@
 - `.omo/evidence/task-4-baduk-mvp-undo-test.txt` — undo QA evidence
 - `.omo/evidence/task-4-baduk-mvp-redo-test.txt` — redo QA evidence
 - `.omo/evidence/task-4-baduk-mvp-undo-root-test.txt` — undo-at-root QA evidence
+
+## 2026-07-05T13:20:00Z - T5: SGF Save & Load
+
+### @sabaki/sgf Integration
+- `@sabaki/sgf` has **no TypeScript declarations** — created `src/types/sgf.d.ts` to declare `stringify` and `parse`.
+- `stringify([tree.root])` takes a `NodeObject[]` (array of root nodes), NOT a `GameTree`. It produces flat SGF text with `FF[4]`, `GM[1]`, `SZ[19]` headers.
+- `parse(contents, { getId })` returns `NodeObject[]` (root nodes), NOT `GameTree[]`. Must wrap the first root node in `new GameTree({ getId, root: parsedNodes[0] })`.
+- **Critical**: The `getId` function must be **shared** between `parse` and `new GameTree` to keep node ids consistent.
+- **Critical**: Parsed trees need `currentId` set to the deepest leaf node, otherwise `getMoveList` and `getCurrentSignMap` return empty/incorrect results because they walk from `currentId` backwards.
+
+### SGF Pass Representation
+- `appendPass` stores pass as `B: []` or `W: []` in the tree.
+- `stringify` serializes empty arrays as `B[]` or `W[]` (empty value inside brackets).
+- `parse` deserializes `B[]` as `B: ['']` (array with one empty string), NOT `B: []`.
+- **Had to fix `gameTree.ts`**: `getMoveList` and `getCurrentSignMap` must treat `prop[0] === ''` as a pass, not as a coordinate. Previously only checked `prop.length === 0`.
+
+### Board Size Handling
+- `treeToSGF` adds `SZ[size]` to the root node data before stringifying.
+- `sgfToTree` extracts `SZ` from parsed root node data.
+- `getBoardSizeFromTree(tree)` helper returns `Number(tree.root.data.SZ?.[0])` or defaults to 19.
+- App.tsx: On load, if the loaded size differs from current, updates `boardSize` state (triggers `useEffect` to recreate game state) OR creates game state directly with the loaded tree.
+
+### UI Integration
+- **Save SGF**: `downloadSGF` creates a Blob with `type: 'application/x-go-sgf'`, uses `URL.createObjectURL`, triggers `<a download>` click, then `URL.revokeObjectURL`.
+- **Load SGF**: Hidden `<input type="file" accept=".sgf,text/plain">` triggered by a "Load SGF" button. `FileReader` reads text, `sgfToTree` parses, `createGameState(size, loadedTree)` creates game state from tree.
+- `createGameState` modified to accept optional `initialTree` parameter. When provided, calls `syncFromTree()`, `deriveLastMove()`, `deriveCurrentPlayer()` to initialize state from the tree.
+
+### Test Results
+- `bun run test`: 38/38 passed (14 gameTree + 12 gameState + 12 sgfIo).
+- `bunx tsc --noEmit -p tsconfig.app.json`: 0 errors.
+- QA scenarios verified: round-trip preserves moves and board state, captures replay correctly after round-trip, malformed SGF with out-of-range coords parses without crash, non-SGF content throws "SGF contains no game data".
+
+### T5 File Manifest
+- `src/lib/sgfIo.ts` — `treeToSGF`, `sgfToTree`, `downloadSGF`, `loadSGFFile`, `getBoardSizeFromTree`
+- `src/lib/sgfIo.test.ts` — 12 tests covering round-trip, captures, malformed, non-SGF, board size extraction, file load, download
+- `src/types/sgf.d.ts` — TypeScript declarations for `@sabaki/sgf`
+- `src/lib/gameTree.ts` — Fixed pass detection for `B: ['']` / `W: ['']` from parsed SGF
+- `src/lib/gameState.ts` — Added optional `initialTree` parameter to `createGameState`
+- `src/App.tsx` — Save SGF button, Load SGF button + hidden file input, file load handler with board size extraction
+- `.omo/evidence/task-5-baduk-mvp-sgf-roundtrip.sgf` — sample SGF file from round-trip test
+- `.omo/evidence/task-5-baduk-mvp-sgf-roundtrip-test.txt` — round-trip test output
+- `.omo/evidence/task-5-baduk-mvp-sgf-malformed-test.txt` — malformed SGF test output
+- `.omo/evidence/task-5-baduk-mvp-sgf-nonsgf-test.txt` — non-SGF rejection test output
+
+## 2026-07-05T13:30:00Z - T6: Control Bar Integration
+
+### ControlBar Component Design
+- Created `src/components/ControlBar.tsx` as a separate presentational component receiving all state and callbacks as props from App.tsx.
+- 10 control elements: Turn indicator (colored circle + text), Move counter, Board Size select, New Game, Pass, Undo, Redo, Save SGF, Load SGF, Coordinates toggle.
+- Dark background `#1a1a2e` with `#3b3b5c` button background and `#e0e0e0` text — makes the wood board pop visually.
+- Flexbox row with `gap: 12px`, `flexWrap: 'wrap'` for responsive behavior on narrow viewports.
+- Vertical divider lines (`1px x 24px`, `#3b3b5c`) separate logical groups: turn/move info | board size | action buttons | coordinates toggle.
+
+### Disabled State Logic
+- Undo disabled when `gameTree.currentId === gameTree.root.id` (at root, no parent to navigate to).
+- Redo disabled when current node has no children: `tree.get(currentId)?.children.length === 0` (at leaf).
+- Disabled style: `opacity: 0.5`, `cursor: 'not-allowed'` — applied via shared `btnStyle(disabled)` helper.
+- Playwright confirmed: `page.locator('button:has-text("Undo")').isDisabled()` returns `true` at game start.
+
+### Board Size Select Migration
+- Moved `<select>` from App.tsx into ControlBar. App.tsx passes `boardSize` and `onBoardSizeChange` (which is just `setBoardSize`).
+- Changing board size mid-game triggers the `useEffect([boardSize])` in App.tsx which recreates game state from scratch — no confirmation dialog needed per spec.
+- `BoardSize` type (`9 | 13 | 19`) is now exported from ControlBar.tsx and imported by App.tsx.
+
+### ShowCoordinates Prop
+- Board.tsx previously had `showCoordinates={true}` hardcoded. Added `showCoordinates?: boolean` prop (default `true`) and passed it through to Shudan's `<Goban>`.
+- App.tsx holds `showCoordinates` state, passes it to both ControlBar (for the checkbox) and Board (for the Goban prop).
+- Toggling the checkbox immediately shows/hides coordinate labels on the board — no re-render delay.
+
+### Move Counter & Turn Indicator
+- Move counter: `getMoveList(gameState.gameTree).length` — returns the number of moves from root to current node. Pass moves count as moves too.
+- Turn indicator: `gameState.currentPlayer === 1 ? 'Black' : 'White'` with a colored circle (`#1a1a1a` for black, `#f0f0f0` for white, both with `1px solid #555` border for visibility on dark background).
+
+### File Input Management
+- File input `<input type="file">` lives inside ControlBar with its own `useRef`. The `onFileChange` callback is passed from App.tsx (handles SGF parsing, board size extraction, game state recreation).
+- This keeps the file input DOM node co-located with its trigger button while the business logic stays in App.tsx.
+
+### Preact Ref Typing
+- `useRef<HTMLInputElement>` in Preact returns `RefObject<HTMLInputElement>` but the type needs casting when passed to `ref={}` on a DOM element due to Preact's JSX types. Used `fileInputRef as RefObject<HTMLInputElement>` cast.
+- Import `RefObject` from `preact` (not `preact/hooks`).
+
+### Verification Results
+- `bunx tsc --noEmit -p tsconfig.app.json`: 0 errors.
+- Playwright QA: All 10 control elements present (count=1 each). Undo disabled at root=true. After 3 moves → "Move 3". After Undo → "Move 2". After Redo → "Move 3". After New Game → "Move 0". Coordinates toggle hides/shows labels.
+- Evidence: `task-6-baduk-mvp-controls.png`, `task-6-baduk-mvp-undo-redo.png`, `task-6-baduk-mvp-newgame.png`, `task-6-baduk-mvp-no-coords.png`, `task-6-baduk-mvp-undo-disabled.txt`.
+
+### T6 File Manifest
+- `src/components/ControlBar.tsx` — New component with all 10 control elements
+- `src/components/Board.tsx` — Added `showCoordinates` prop (was hardcoded `true`)
+- `src/App.tsx` — Integrated ControlBar, added `showCoordinates` state, `handleNewGame` handler, removed inline buttons/select
+- `scripts/screenshot-t6.ts` — Playwright screenshot helper for T6 visual evidence
+
+## 2026-07-05T13:25:00Z - T7: Comprehensive Vitest Test Suite
+
+### Test Suite Structure
+- Created `src/lib/__tests__/gameState.test.ts` with 22 comprehensive tests covering all required scenarios.
+- Existing tests remain in `src/lib/gameState.test.ts` (12 tests), `src/lib/gameTree.test.ts` (14 tests), `src/lib/sgfIo.test.ts` (12 tests).
+- Total: 60 tests across 4 test files, all passing.
+
+### Required Test Cases Covered
+(a) place stone on empty intersection → appears on board  
+(b) place on occupied → rejected  
+(c) place on another stone's liberty → no capture  
+(d) fill all liberties of a group → group captured  
+(e) multi-stone group capture  
+(f) simple ko: setup cross-capture → immediate recapture rejected  
+(g) suicide move rejected  
+(h) pass flips turn without placing  
+(i) board size 9/13/19 initializes correctly  
+(j) undo restores previous state  
+(k) redo after undo restores  
+(l) undo at root is no-op  
+(m) SGF round-trip: play moves → save → load → board matches  
+(n) SGF parse malformed input → handles gracefully  
+
+### Configuration Changes
+- `vitest.config.ts`: Added `setupFiles: ['./src/test-setup.ts']` to load `@testing-library/preact` before each test.
+- `src/test-setup.ts`: Created with `import '@testing-library/preact'`.
+- `package.json`: Changed `"test": "vitest"` (watch mode) and added `"test:run": "vitest run"` (CI single run).
+
+### Coverage Results
+- gameState.ts: 96.07% statements, 93.75% branch, 92.3% funcs, 97.91% lines
+- gameTree.ts: 98.63% statements, 83.58% branch, 100% funcs, 98.59% lines
+- sgfIo.ts: 93.02% statements, 87.5% branch, 88.88% funcs, 95.12% lines
+- All three modules exceed the ≥80% threshold.
+
+### QA Scenarios Verified
+- `bun run test:run`: 60/60 passed, exit 0. Evidence: `.omo/evidence/task-7-baduk-mvp-test-output.txt`
+- Intentional failure: modified assertion to `.toBe(99)`, `bun run test:run` exited 1 with `FAIL` in output. Evidence: `.omo/evidence/task-7-baduk-mvp-test-failure.txt`
+- Coverage: `bunx vitest run --coverage` shows all modules ≥80%. Evidence: `.omo/evidence/task-7-baduk-mvp-coverage.txt`
+
+### Coordinate Gotcha in Tests
+- `signMap` is indexed `[y][x]`, not `[x][y]`. A stone placed at vertex `[4,5]` (x=4, y=5) must be checked with `signMap[5][4]`. Two initial test assertions failed because of this coordinate swap. The existing T3 tests already use the correct indexing pattern (`signMap[0]![0]`), but multi-stone capture tests require careful mental mapping.
+
+### T7 File Manifest
+- `src/lib/__tests__/gameState.test.ts` — 22 comprehensive tests for gameState, gameTree, and sgfIo
+- `src/test-setup.ts` — `@testing-library/preact` import for jsdom setup
+- `vitest.config.ts` — Added `setupFiles` entry
+- `package.json` — `test` script switched to watch mode, `test:run` added for CI

@@ -13,6 +13,7 @@ export interface BoardProps {
   markerMap?: Map<Marker | null> | undefined
   onVertexClick?: ((evt: MouseEvent, vertex: Vertex) => void) | undefined
   flashTrigger?: number
+  showCoordinates?: boolean
 }
 
 export function Board({
@@ -21,6 +22,7 @@ export function Board({
   markerMap,
   onVertexClick,
   flashTrigger = 0,
+  showCoordinates = true,
 }: BoardProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -68,7 +70,7 @@ export function Board({
       <Goban
         vertexSize={vertexSize}
         signMap={signMap}
-        showCoordinates={true}
+        showCoordinates={showCoordinates}
         fuzzyStonePlacement={true}
         animateStonePlacement={true}
         {...(onVertexClick !== undefined ? { onVertexClick } : {})}
