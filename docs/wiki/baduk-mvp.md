@@ -1,3 +1,11 @@
+---
+title: 바둑 MVP 완성
+description: 9x9/13x13/19x19 바둑판 MVP: Sabaki 라이브러리 연동, SGF 입출력, Undo/Redo, 기술 스택, Wave 작업 흐름, Phase 2 로드맵
+tags: [mvp, sabaki, feat]
+created: 2026-07-05
+updated: 2026-07-05
+---
+
 # 🎉 baduk-mvp 완성 기념 노트
 
 > **작성일**: 2026-07-05
