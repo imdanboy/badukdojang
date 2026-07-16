@@ -28,5 +28,5 @@ coverage/
 playwright-report/
 test-results/
 
-# OMO evidence (ephemeral QA artifacts)
-.omo/evidence/
+# OMO (ephemeral session/state artifacts)
+.omo/
