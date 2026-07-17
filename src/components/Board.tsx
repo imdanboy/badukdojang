@@ -4,8 +4,10 @@
  * as a fixed pixel number (Shudan requires numeric vertexSize, not CSS).
  * Flashes a red border for 200ms when an illegal move is attempted.
  */
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Goban, type Map, type Marker, type Vertex } from '@sabaki/shudan'
+
+export type ThemeName = 'shinkaya' | 'walnut' | 'classic'
 
 export interface BoardProps {
   signMap: Map<0 | 1 | -1>
@@ -14,6 +16,8 @@ export interface BoardProps {
   onVertexClick?: ((evt: MouseEvent, vertex: Vertex) => void) | undefined
   flashTrigger?: number
   showCoordinates?: boolean
+  themeName?: ThemeName
+  currentPlayer: 1 | -1
 }
 
 export function Board({
@@ -23,10 +27,13 @@ export function Board({
   onVertexClick,
   flashTrigger = 0,
   showCoordinates = true,
+  themeName = 'shinkaya',
+  currentPlayer,
 }: BoardProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [flashError, setFlashError] = useState(false)
+  const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -48,12 +55,32 @@ export function Board({
     return () => clearTimeout(timer)
   }, [flashTrigger])
 
-  // Shudan needs a fixed pixel number; fall back to a sane default
-  // until the first ResizeObserver callback fires.
   const vertexSize =
     containerWidth > 0
       ? Math.floor(containerWidth / boardSize)
       : 24
+
+  const ghostStoneMap = useMemo<Map<{ sign: 1 | -1; faint: true } | null>>(
+    () => {
+      if (hoveredVertex === null) return undefined as never
+      const [hx, hy] = hoveredVertex
+      if (signMap[hy]?.[hx] !== 0) return undefined as never
+      return signMap.map((row, y) =>
+        row.map((_, x) =>
+          x === hx && y === hy ? { sign: currentPlayer, faint: true } : null,
+        ),
+      )
+    },
+    [hoveredVertex, signMap, currentPlayer],
+  )
+
+  const handleMouseEnter = (_evt: MouseEvent, vertex: Vertex) => {
+    setHoveredVertex(vertex)
+  }
+
+  const handleMouseLeave = () => {
+    setHoveredVertex(null)
+  }
 
   return (
     <div
@@ -68,11 +95,15 @@ export function Board({
       }}
     >
       <Goban
+        className={`shudan-theme-${themeName}`}
         vertexSize={vertexSize}
         signMap={signMap}
         showCoordinates={showCoordinates}
-        fuzzyStonePlacement={true}
+        fuzzyStonePlacement={false}
         animateStonePlacement={true}
+        ghostStoneMap={ghostStoneMap}
+        onVertexMouseEnter={handleMouseEnter}
+        onVertexMouseLeave={handleMouseLeave}
         {...(onVertexClick !== undefined ? { onVertexClick } : {})}
         {...(markerMap !== undefined ? { markerMap } : {})}
       />

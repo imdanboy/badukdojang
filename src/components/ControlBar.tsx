@@ -8,6 +8,7 @@ import { useRef } from 'preact/hooks'
 import type { RefObject } from 'preact'
 import type { GameState } from '../lib/gameState.ts'
 import { getMoveList } from '../lib/gameTree.ts'
+import type { ThemeName } from './Board.tsx'
 
 export type BoardSize = 9 | 13 | 19
 
@@ -23,6 +24,10 @@ export interface ControlBarProps {
   onFileChange: (e: Event) => void
   showCoordinates: boolean
   onToggleCoordinates: () => void
+  themeName: ThemeName
+  onThemeChange: (theme: ThemeName) => void
+  soundEnabled: boolean
+  onToggleSound: () => void
 }
 
 const btnStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
@@ -48,6 +53,10 @@ export function ControlBar({
   onFileChange,
   showCoordinates,
   onToggleCoordinates,
+  themeName,
+  onThemeChange,
+  soundEnabled,
+  onToggleSound,
 }: ControlBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -180,6 +189,41 @@ export function ControlBar({
         />
         Coordinates
       </label>
+
+      <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+
+      {/* Theme selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {(['shinkaya', 'walnut', 'classic'] as ThemeName[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => onThemeChange(t)}
+            style={{
+              ...btnStyle(false),
+              padding: '4px 10px',
+              fontSize: '12px',
+              background: themeName === t ? '#5a7fb5' : '#3b3b5c',
+            }}
+          >
+            {t === 'shinkaya' ? 'Wood' : t === 'walnut' ? 'Walnut' : 'Classic'}
+          </button>
+        ))}
+      </div>
+
+      {/* Sound toggle */}
+      <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+      <button
+        onClick={onToggleSound}
+        style={{
+          ...btnStyle(false),
+          fontSize: '16px',
+          background: soundEnabled ? '#5a7fb5' : '#3b3b5c',
+          lineHeight: '1',
+        }}
+        title={soundEnabled ? 'Sound On' : 'Sound Off'}
+      >
+        {soundEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07'}
+      </button>
     </div>
   )
 }

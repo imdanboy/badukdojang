@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { SignMap } from '@sabaki/go-board'
 import type { Map, Marker, Vertex } from '@sabaki/shudan'
-import { Board } from './components/Board.tsx'
+import { Board, type ThemeName } from './components/Board.tsx'
 import { ControlBar, type BoardSize } from './components/ControlBar.tsx'
 import { createGameState } from './lib/gameState.ts'
 import {
@@ -14,6 +14,12 @@ import {
   getBoardSizeFromTree,
   loadSGFFile,
 } from './lib/sgfIo.ts'
+import {
+  playStoneSound,
+  playCaptureSound,
+  setSoundEnabled,
+  isSoundEnabled,
+} from './lib/sound.ts'
 
 export function App() {
   const [boardSize, setBoardSize] = useState<BoardSize>(19)
@@ -21,6 +27,8 @@ export function App() {
   const [signMap, setSignMap] = useState<SignMap>(() => gameState.getSignMap())
   const [flashTrigger, setFlashTrigger] = useState(0)
   const [showCoordinates, setShowCoordinates] = useState(true)
+  const [themeName, setThemeName] = useState<ThemeName>('shinkaya')
+  const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled())
 
   // Re-initialize game state whenever the size changes.
   useEffect(() => {
@@ -39,16 +47,23 @@ export function App() {
     )
     const row = map[ly]
     if (row !== undefined) {
-      row[lx] = { type: 'point' }
+      row[lx] = { type: 'circle' }
     }
     return map
   }, [signMap, gameState.lastMove])
 
   const handleVertexClick = (_evt: MouseEvent, vertex: Vertex) => {
+    const oldCaptures = gameState.board.getCaptures(1) + gameState.board.getCaptures(-1)
     const success = gameState.makeMove(vertex)
     if (!success) {
       setFlashTrigger((prev) => prev + 1)
       return
+    }
+    const newCaptures = gameState.board.getCaptures(1) + gameState.board.getCaptures(-1)
+    if (newCaptures > oldCaptures) {
+      playCaptureSound(newCaptures - oldCaptures)
+    } else {
+      playStoneSound()
     }
     setSignMap(gameState.getSignMap())
   }
@@ -109,6 +124,12 @@ export function App() {
     }
   }
 
+  const handleToggleSound = () => {
+    const next = !soundEnabled
+    setSoundEnabled(next)
+    setSoundEnabledState(next)
+  }
+
   return (
     <div
       id="app-root"
@@ -135,6 +156,10 @@ export function App() {
         onFileChange={handleFileChange}
         showCoordinates={showCoordinates}
         onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}
+        themeName={themeName}
+        onThemeChange={setThemeName}
+        soundEnabled={soundEnabled}
+        onToggleSound={handleToggleSound}
       />
       <Board
         signMap={signMap}
@@ -143,6 +168,8 @@ export function App() {
         onVertexClick={handleVertexClick}
         flashTrigger={flashTrigger}
         showCoordinates={showCoordinates}
+        themeName={themeName}
+        currentPlayer={gameState.currentPlayer}
       />
     </div>
   )

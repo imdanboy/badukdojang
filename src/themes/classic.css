@@ -1,0 +1,25 @@
+.shudan-theme-classic {
+  --shudan-board-border-color: #ca933a;
+  --shudan-board-background-color: #f1b458;
+  --shudan-board-foreground-color: #5e2e0c;
+}
+.shudan-theme-classic.shudan-goban-image {
+  background-image: url('/themes/mono.jpg');
+  background-size: cover;
+}
+.shudan-theme-classic .shudan-stone-image.shudan-sign_1 {
+  background-image: none;
+  background-color: #222;
+  border-radius: 50%;
+}
+.shudan-theme-classic .shudan-stone-image.shudan-sign_-1 {
+  background-image: none;
+  background-color: #eee;
+  border-radius: 50%;
+}
+
+.shudan-theme-classic .shudan-vertex .shudan-ghost,
+.shudan-theme-classic .shudan-vertex .shudan-ghost::before {
+  width: .9em;
+  height: .9em;
+}

@@ -1,0 +1,21 @@
+.shudan-theme-walnut {
+  --shudan-board-border-color: #5a2e14;
+  --shudan-board-background-color: #5a3018;
+  --shudan-board-foreground-color: #101010;
+}
+.shudan-theme-walnut.shudan-goban-image {
+  background-image: url('/themes/walnut.jpg');
+  background-size: cover;
+}
+.shudan-theme-walnut .shudan-stone-image.shudan-sign_1 {
+  background-image: url('/themes/black43.png');
+}
+.shudan-theme-walnut .shudan-stone-image.shudan-sign_-1 {
+  background-image: url('/themes/white43.png');
+}
+
+.shudan-theme-walnut .shudan-vertex .shudan-ghost,
+.shudan-theme-walnut .shudan-vertex .shudan-ghost::before {
+  width: .9em;
+  height: .9em;
+}

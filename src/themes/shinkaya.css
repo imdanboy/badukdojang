@@ -1,0 +1,21 @@
+.shudan-theme-shinkaya {
+  --shudan-board-border-color: #c49a4a;
+  --shudan-board-background-color: #d4a252;
+  --shudan-board-foreground-color: #5e2e0c;
+}
+.shudan-theme-shinkaya.shudan-goban-image {
+  background-image: url('/themes/shinkaya.jpg');
+  background-size: cover;
+}
+.shudan-theme-shinkaya .shudan-stone-image.shudan-sign_1 {
+  background-image: url('/themes/black43.png');
+}
+.shudan-theme-shinkaya .shudan-stone-image.shudan-sign_-1 {
+  background-image: url('/themes/white43.png');
+}
+
+.shudan-theme-shinkaya .shudan-vertex .shudan-ghost,
+.shudan-theme-shinkaya .shudan-vertex .shudan-ghost::before {
+  width: .9em;
+  height: .9em;
+}

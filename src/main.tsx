@@ -1,6 +1,9 @@
 import { render } from 'preact'
 import '@sabaki/shudan/css/goban.css'
 import './index.css'
+import './themes/shinkaya.css'
+import './themes/walnut.css'
+import './themes/classic.css'
 import { App } from './App.tsx'
 
 const root = document.getElementById('app')
