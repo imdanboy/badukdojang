@@ -1,0 +1,15 @@
+{
+  "name": "badukdojang-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run gtp-bridge.ts",
+    "typecheck": "tsc --noEmit -p ../tsconfig.server.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "~6.0.2"
+  }
+}
