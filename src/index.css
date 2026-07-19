@@ -46,3 +46,28 @@ body {
     --text: #e5e7eb;
   }
 }
+
+/* AI thinking ghost stone pulsation */
+@keyframes ghost-pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.shudan-vertex .shudan-ghost::before {
+  animation: none;
+}
+
+.shudan-vertex.shudan-ghost_good .shudan-ghost::before {
+  animation: ghost-pulse 1.2s ease-in-out infinite;
+}
+
+/* AI move blue outline flash */
+.ai-move-flash {
+  outline: 3px solid #3b82f6 !important;
+  outline-offset: -3px;
+  transition: outline 0.3s ease;
+}

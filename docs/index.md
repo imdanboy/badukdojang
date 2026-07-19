@@ -3,7 +3,7 @@ title: badukdojang 위키
 description: 프로젝트 위키 진입점 (MOC). wiki/ 영속 노트와 ideas.md 로 라우팅.
 tags: [moc, index]
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-18 (katago-engines 설치법 추가)
 ---
 
 # badukdojang 위키
@@ -26,3 +26,5 @@ LLM 이 어떤 노트를 읽을지 토큰을 거의 안 쓰고 결정할 수 있
 ## Wiki — 영속 레퍼런스
 - [baduk-mvp](wiki/baduk-mvp.md) — 9x9/13x13/19x19 바둑판 MVP: Sabaki 라이브러리 연동, SGF 입출력, Undo/Redo, 기술 스택, Wave 작업 흐름, Phase 2 로드맵
 - [token-usage](wiki/token-usage.md) — baduk-mvp 개발 LLM 토큰 소모량 추적: 계획 3.08M vs 실행 0.56M, 캐시 히트율 56%→96%, 작업별 추정 분배
+- [katago-engines](wiki/katago-engines.md) — 엔진 사전 연구 + 설치·사용법: KataGo 기능/모델/튜닝 + brew 설치, 모델 다운로드, 환경변수, 두 터미널 실행, 디버깅 체크리스트
+- [katago-ai-integration-report](wiki/katago-ai-integration-report.md) — AI 대국 실행 완료 보고: AI 모드, 형세분석, 계가, 설정패널. 토큰 7.38M, 15 todo 완료, 48 E2E pass

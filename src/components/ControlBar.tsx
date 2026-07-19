@@ -1,7 +1,8 @@
 /*
  * ControlBar - Horizontal control bar above the board.
  * Contains: New Game, Pass, Undo, Redo, Save SGF, Load SGF,
- * Coordinates toggle, Board Size select, Move counter, Turn indicator.
+ * Coordinates toggle, Board Size select, Move counter, Turn indicator,
+ * Game mode selector (self-play / AI), AI Move button.
  * Dark background (#1a1a2e) to make the wood board pop.
  */
 import { useRef } from 'preact/hooks'
@@ -9,6 +10,7 @@ import type { RefObject } from 'preact'
 import type { GameState } from '../lib/gameState.ts'
 import { getMoveList } from '../lib/gameTree.ts'
 import type { ThemeName } from './Board.tsx'
+import type { GameMode } from '../App.tsx'
 
 export type BoardSize = 9 | 13 | 19
 
@@ -28,6 +30,18 @@ export interface ControlBarProps {
   onThemeChange: (theme: ThemeName) => void
   soundEnabled: boolean
   onToggleSound: () => void
+  gameMode: GameMode
+  onGameModeChange: (mode: GameMode) => void
+  isAiThinking: boolean
+  onAiMove: () => void
+  showOwnership: boolean
+  hasOwnership: boolean
+  onToggleOwnership: () => void
+  onScore: () => void
+  canScore: boolean
+  isScoring: boolean
+  analysisEnabled: boolean
+  onToggleAnalysis: () => void
 }
 
 const btnStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
@@ -39,6 +53,17 @@ const btnStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
   opacity: disabled ? 0.5 : 1,
   background: '#3b3b5c',
   color: '#e0e0e0',
+})
+
+const modeBtnStyle = (active: boolean, disabled: boolean): preact.JSX.CSSProperties => ({
+  padding: '6px 14px',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  fontSize: '13px',
+  background: active ? '#5a7fb5' : '#3b3b5c',
+  color: '#e0e0e0',
+  opacity: disabled ? 0.5 : 1,
 })
 
 export function ControlBar({
@@ -57,6 +82,18 @@ export function ControlBar({
   onThemeChange,
   soundEnabled,
   onToggleSound,
+  gameMode,
+  onGameModeChange,
+  isAiThinking,
+  onAiMove,
+  showOwnership,
+  hasOwnership,
+  onToggleOwnership,
+  onScore,
+  canScore,
+  isScoring,
+  analysisEnabled,
+  onToggleAnalysis,
 }: ControlBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -140,12 +177,55 @@ export function ControlBar({
 
       <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
 
+      {/* Game mode selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <button
+          id="mode-selfplay"
+          style={modeBtnStyle(gameMode === 'selfplay', false)}
+          onClick={() => onGameModeChange('selfplay')}
+        >
+          혼자두기
+        </button>
+        <button
+          id="mode-ai"
+          style={modeBtnStyle(gameMode === 'ai', false)}
+          onClick={() => onGameModeChange('ai')}
+        >
+          AI 대국
+        </button>
+      </div>
+
+      {/* AI Move button (only in AI mode) */}
+      {gameMode === 'ai' && (
+        <>
+          <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+          <button
+            id="ai-move-btn"
+            style={btnStyle(isAiThinking)}
+            disabled={isAiThinking}
+            onClick={onAiMove}
+          >
+            {isAiThinking ? 'AI 생각중...' : 'AI Move'}
+          </button>
+        </>
+      )}
+
+      <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+
       {/* Action buttons */}
       <button style={btnStyle(false)} onClick={onNewGame}>
         New Game
       </button>
       <button style={btnStyle(false)} onClick={onPass}>
         Pass
+      </button>
+      <button
+        id="score-btn"
+        style={btnStyle(!canScore || isScoring)}
+        disabled={!canScore || isScoring}
+        onClick={onScore}
+      >
+        {isScoring ? '계가 중...' : '계가'}
       </button>
       <button
         style={btnStyle(!isAtRoot)}
@@ -223,6 +303,48 @@ export function ControlBar({
         title={soundEnabled ? 'Sound On' : 'Sound Off'}
       >
         {soundEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07'}
+      </button>
+
+      {/* Ownership heatmap toggle */}
+      <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+      <button
+        id="ownership-toggle"
+        onClick={onToggleOwnership}
+        disabled={!hasOwnership}
+        title={
+          hasOwnership
+            ? showOwnership
+              ? 'Ownership heatmap on'
+              : 'Ownership heatmap off'
+            : 'No analysis data yet'
+        }
+        style={{
+          ...btnStyle(!hasOwnership),
+          padding: '6px 14px',
+          fontSize: '13px',
+          background: showOwnership
+            ? '#5a7fb5'
+            : hasOwnership
+              ? '#3b3b5c'
+              : '#2a2a3e',
+        }}
+      >
+        Ownership
+      </button>
+
+      <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
+      <button
+        id="analysis-toggle"
+        onClick={onToggleAnalysis}
+        title={analysisEnabled ? 'Analysis on' : 'Analysis off'}
+        style={{
+          ...btnStyle(false),
+          padding: '6px 14px',
+          fontSize: '13px',
+          background: analysisEnabled ? '#5a7fb5' : '#3b3b5c',
+        }}
+      >
+        Analysis
       </button>
     </div>
   )
