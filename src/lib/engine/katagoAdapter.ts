@@ -211,6 +211,17 @@ export async function requestMove(
   player: Player,
   settings?: EngineSettings,
 ): Promise<Vertex | 'pass' | 'resign'> {
+  if (settings?.playStyle === 'human') {
+    return requestMovePolicyWeighted(gameTree, player, settings)
+  }
+  return requestMoveGTP(gameTree, player, settings)
+}
+
+async function requestMoveGTP(
+  gameTree: GameTree,
+  player: Player,
+  settings?: EngineSettings,
+): Promise<Vertex | 'pass' | 'resign'> {
   const color = playerToColor(player)
   const boardSize = settings?.boardSize ?? 19
   const komi = settings?.komi ?? 6.5
@@ -386,3 +397,106 @@ export async function abortOngoing(): Promise<void> {
     terminateId,
   })
 }
+
+interface PolicyCandidate {
+  vertex: Vertex | 'pass'
+  probability: number
+}
+
+export function pickMoveFromPolicy(
+  policy: readonly number[],
+  boardSize: number,
+  difficulty: number,
+  occupied?: ReadonlySet<string>,
+): Vertex | 'pass' | 'resign' {
+  const candidates: PolicyCandidate[] = []
+
+  for (let ourX = 0; ourX < boardSize; ourX++) {
+    for (let ourY = 0; ourY < boardSize; ourY++) {
+      const kataY = boardSize - 1 - ourY
+      const idx = kataY * boardSize + ourX
+      const prob = policy[idx]
+      if (prob !== undefined && prob > 0.001 && !occupied?.has(`${ourX},${ourY}`)) {
+        candidates.push({ vertex: [ourX, ourY], probability: prob })
+      }
+    }
+  }
+
+  const passIdx = boardSize * boardSize
+  if (passIdx < policy.length) {
+    const prob = policy[passIdx]
+    if (prob !== undefined && prob > 0.001) {
+      candidates.push({ vertex: 'pass', probability: prob })
+    }
+  }
+
+  if (candidates.length === 0) return 'pass'
+
+  candidates.sort((a, b) => b.probability - a.probability)
+
+  const overrideThreshold = 0.4 + (difficulty - 1) * 0.4 / 19
+  if (candidates[0]!.probability > overrideThreshold) {
+    return candidates[0]!.vertex
+  }
+
+  const nCandidates = Math.max(1, Math.round(1 + (20 - difficulty) * 1.8))
+
+  const picked: PolicyCandidate[] = []
+  const remaining = candidates.slice()
+
+  for (let i = 0; i < Math.min(nCandidates, remaining.length); i++) {
+    const idx = Math.floor(Math.random() * remaining.length)
+    picked.push(remaining[idx]!)
+    remaining.splice(idx, 1)
+  }
+
+  picked.sort((a, b) => b.probability - a.probability)
+  return picked[0]!.vertex
+}
+
+export async function requestMovePolicyWeighted(
+  gameTree: GameTree,
+  player: Player,
+  settings: EngineSettings,
+): Promise<Vertex | 'pass' | 'resign'> {
+  const boardSize = settings.boardSize ?? 19
+  const moves = getMoveList(gameTree).map((move) => {
+    const color = move.sign === 1 ? 'B' : 'W'
+    const vertex = move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
+    return `${color} ${vertex}`
+  })
+
+  const body: Record<string, unknown> = {
+    boardSize,
+    moves,
+    komi: settings.komi,
+    includePolicy: true,
+    maxVisits: 1,
+    maxTime: 0.5,
+  }
+
+  if (settings.rules !== undefined) {
+    body.rules = settings.rules
+  }
+
+  const analysis = await postJSON<AnalyzeResponse>(
+    `${API_BASE}/analyze`,
+    body,
+    15000,
+  )
+
+  if (!analysis.policy || analysis.policy.length === 0) {
+    return requestMoveGTP(gameTree, player, settings)
+  }
+
+  const occupied = new Set<string>()
+  for (const m of getMoveList(gameTree)) {
+    if (m.vertex !== 'pass') {
+      occupied.add(`${m.vertex[0]},${m.vertex[1]}`)
+    }
+  }
+  const difficulty = settings.difficulty ?? 10
+  return pickMoveFromPolicy(analysis.policy, boardSize, difficulty, occupied)
+}
+
+

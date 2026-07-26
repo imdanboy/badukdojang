@@ -271,6 +271,8 @@ export function App() {
       wideRootNoise: engineSettings.wideRootNoise,
       playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
       boardSize,
+      difficulty: engineSettings.difficulty,
+      playStyle: engineSettings.playStyle,
     }
   }, [engineSettings, boardSize])
 
@@ -289,6 +291,8 @@ export function App() {
       wideRootNoise: engineSettings.wideRootNoise,
       playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
       boardSize,
+      difficulty: engineSettings.difficulty,
+      playStyle: engineSettings.playStyle,
     }
   }, [engineSettings, boardSize])
 

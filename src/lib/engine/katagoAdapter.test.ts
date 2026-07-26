@@ -13,6 +13,7 @@ import {
   parseGTPVertex,
   getEngineState,
   resetEngineState,
+  pickMoveFromPolicy,
 } from './katagoAdapter.ts'
 
 function mockResponse(body: unknown, status = 200): Response {
@@ -522,6 +523,63 @@ describe('katagoAdapter', () => {
       expect(() => parseGTPVertex('invalid', 19)).toThrow(EngineError)
       expect(() => parseGTPVertex('', 19)).toThrow(EngineError)
       expect(() => parseGTPVertex('1', 19)).toThrow(EngineError)
+    })
+  })
+
+  describe('pickMoveFromPolicy', () => {
+    function evenPolicy(size: number, passProb = 0.001): number[] {
+      const cells = size * size
+      const perCell = (1 - passProb) / cells
+      const p = Array.from({ length: cells + 1 }, () => perCell)
+      p[cells] = passProb
+      return p
+    }
+
+    test('returns pass for empty policy', () => {
+      expect(pickMoveFromPolicy([], 19, 10)).toBe('pass')
+    })
+
+    test('returns pass when all probabilities are zero', () => {
+      expect(pickMoveFromPolicy(Array(362).fill(0), 19, 10)).toBe('pass')
+    })
+
+    test('override catches obvious move at low difficulty', () => {
+      const p = evenPolicy(19)
+      p[180] = 0.85
+      expect(pickMoveFromPolicy(p, 19, 1)).toEqual([9, 9])
+    })
+
+    test('override catches pass with very high probability', () => {
+      const p = evenPolicy(19, 0.85)
+      expect(pickMoveFromPolicy(p, 19, 20)).toBe('pass')
+    })
+
+    test('works for 9x9 board', () => {
+      const p = evenPolicy(9)
+      p[40] = 0.5
+      expect(pickMoveFromPolicy(p, 9, 1)).not.toBe('pass')
+    })
+
+    test('weak difficulty distributes picks', () => {
+      const p = Array(362).fill(0.001)
+      for (let i = 0; i < 10; i++) p[180 + i] = 0.05
+      const seen = new Set<string>()
+      for (let i = 0; i < 50; i++) seen.add(JSON.stringify(pickMoveFromPolicy(p, 19, 20)))
+      expect(seen.size).toBeGreaterThan(1)
+    })
+
+    test('strong difficulty consistently picks top move', () => {
+      const p = Array(362).fill(0.001)
+      p[0] = 0.5; p[1] = 0.2
+      const seen = new Set<string>()
+      for (let i = 0; i < 50; i++) seen.add(JSON.stringify(pickMoveFromPolicy(p, 19, 1)))
+      expect(seen.size).toBeLessThanOrEqual(3)
+    })
+
+    test('maps kata coords to our coords', () => {
+      const p = Array(362).fill(0.001)
+      p[19 * 18] = 0.5
+      expect(pickMoveFromPolicy(p, 19, 1)).toEqual([0, 0])
     })
   })
 })

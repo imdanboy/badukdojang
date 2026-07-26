@@ -33,6 +33,7 @@ export interface AnalyzeRequest {
   readonly humanSLProfile?: string;
   readonly wideRootNoise?: number;
   readonly playoutDoublingAdvantage?: number;
+  readonly includePolicy?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -78,6 +79,7 @@ interface AnalysisEngineQuery {
   readonly maxTime?: number;
   readonly humanSLProfile?: string;
   readonly includeOwnership?: boolean;
+  readonly includePolicy?: boolean;
   readonly reportDuringSearch?: boolean;
   readonly reportDuringSearchEvery?: number;
 }
@@ -97,6 +99,7 @@ interface AnalysisEngineResponse {
     readonly pv?: readonly string[];
   }>;
   readonly ownership?: number[];
+  readonly policy?: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +484,7 @@ export class KataGoBridge {
   }
 
   private async doAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-    const { boardSize, moves, komi, maxVisits, maxTime, humanSLProfile, wideRootNoise, playoutDoublingAdvantage, includeOwnership, signal } =
+    const { boardSize, moves, komi, maxVisits, maxTime, humanSLProfile, wideRootNoise, playoutDoublingAdvantage, includeOwnership, includePolicy, signal } =
       request;
 
     if (this.analysisProcess === null) {
@@ -513,6 +516,9 @@ export class KataGoBridge {
     }
     if (maxTime !== undefined) {
       (query as unknown as Record<string, unknown>).maxTime = maxTime;
+    }
+    if (includePolicy === true) {
+      (query as unknown as Record<string, unknown>).includePolicy = true;
     }
     const q = query as unknown as Record<string, unknown>;
     if (humanSLProfile !== undefined || wideRootNoise !== undefined || playoutDoublingAdvantage !== undefined) {
@@ -606,6 +612,7 @@ export class KataGoBridge {
       winrate: rootInfo?.winrate ?? 0,
       scoreLead: rootInfo?.scoreLead ?? 0,
       ownership: ownership,
+      policy: result.policy,
       bestMoves:
         moveInfos?.map((m): BestMoveInfo => ({
           move: m.move ?? 'pass',

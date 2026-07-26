@@ -54,10 +54,10 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   rules: 'korean',
   playStyle: 'human',
   humanSLProfile: 'rank_10k',
-  maxVisits: 25,
+  maxVisits: 10,
   manualTemperature: -1,
-  chosenMoveTemperature: 1.5,
-  wideRootNoise: 0.15,
+  chosenMoveTemperature: 2.0,
+  wideRootNoise: 0.3,
   playoutDoublingAdvantage: -1.0,
 }
 

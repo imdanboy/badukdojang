@@ -507,6 +507,8 @@ export interface EngineSettings {
   readonly komi: number
   readonly humanSLProfile?: HumanSLProfile
   readonly boardSize?: number
+  readonly difficulty?: number
+  readonly playStyle?: 'human' | 'strong'
 }
 
 // ============================================================================
