@@ -34,6 +34,7 @@ export interface EngineSettings {
   manualTemperature: number // -1 = auto (use difficulty), 0-10 = manual override
   chosenMoveTemperature: number
   wideRootNoise: number
+  playoutDoublingAdvantage: number
 }
 
 export interface EngineSettingsProps {
@@ -57,6 +58,7 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   manualTemperature: -1,
   chosenMoveTemperature: 1.5,
   wideRootNoise: 0.15,
+  playoutDoublingAdvantage: -1.0,
 }
 
 const MIN_THINKING_TIME = 1
@@ -96,22 +98,34 @@ export function difficultyToProfile(kyu: number): HumanSLProfile {
 }
 
 function difficultyToVisits(kyu: number): number {
-  return Math.max(10, Math.round(50 - 2.5 * kyu))
+  if (kyu >= 18) return 1
+  if (kyu >= 13) return 5
+  if (kyu >= 8) return 10
+  if (kyu >= 3) return 25
+  return 50
 }
 
 function difficultyToNoise(kyu: number): number {
-  if (kyu >= 16) return 0.5
-  if (kyu >= 11) return 0.3
-  if (kyu >= 6) return 0.15
-  if (kyu >= 3) return 0.05
+  if (kyu >= 18) return 0.8
+  if (kyu >= 13) return 0.5
+  if (kyu >= 8) return 0.3
+  if (kyu >= 3) return 0.1
+  return 0.0
+}
+
+function difficultyToDoublingAdvantage(kyu: number): number {
+  if (kyu >= 16) return -3.0
+  if (kyu >= 11) return -2.0
+  if (kyu >= 6) return -1.0
+  if (kyu >= 3) return -0.5
   return 0.0
 }
 
 function difficultyToTemperature(kyu: number): number {
-  if (kyu >= 18) return 5.0
-  if (kyu >= 14) return 3.0
-  if (kyu >= 9) return 1.5
-  if (kyu >= 4) return 0.3
+  if (kyu >= 18) return 10.0
+  if (kyu >= 14) return 5.0
+  if (kyu >= 9) return 2.0
+  if (kyu >= 4) return 0.5
   return 0.1
 }
 
@@ -173,6 +187,8 @@ export function normalizeSettings(
   )
   const wideRootNoise =
     playStyle === 'strong' ? 0.0 : difficultyToNoise(difficulty)
+  const playoutDoublingAdvantage =
+    playStyle === 'strong' ? 0.0 : difficultyToDoublingAdvantage(difficulty)
 
   return {
     enabled: partial.enabled ?? DEFAULT_SETTINGS.enabled,
@@ -191,6 +207,7 @@ export function normalizeSettings(
     manualTemperature,
     chosenMoveTemperature,
     wideRootNoise,
+    playoutDoublingAdvantage,
   }
 }
 

@@ -366,6 +366,7 @@ describe('KataGoBridge analyze', () => {
       maxVisits: 100,
       maxTime: 5,
       humanSLProfile: 'rank_10k',
+      playoutDoublingAdvantage: -1.5,
     };
 
     await bridge.analyze(request);
@@ -373,7 +374,8 @@ describe('KataGoBridge analyze', () => {
     const lastQuery = JSON.parse(queriesSent[queriesSent.length - 1]!);
     expect(lastQuery.maxVisits).toBe(100);
     expect(lastQuery.maxTime).toBe(5);
-    expect(lastQuery.humanSLProfile).toBe('rank_10k');
+    expect(lastQuery.overrideSettings.humanSLProfile).toBe('rank_10k');
+    expect(lastQuery.overrideSettings.playoutDoublingAdvantage).toBe(-1.5);
   });
 });
 

@@ -61,8 +61,15 @@ export HUMAN_MODEL_PATH="$HOME/katago-models/b18c384nbt-humanv0.bin.gz"
 # export PORT=8787
 ```
 
-### 3단계: 두 개 터미널 실행
+### 3단계: 실행
 
+**한 번에 (권장):**
+```bash
+bun run start
+```
+bridge가 준비될 때까지 기다렸다가 Vite dev server를 자동으로 띄웁니다.
+
+**수동으로 두 개 터미널:**
 ```bash
 # Terminal 1 — KataGo bridge (먼저 켜야 함)
 bun run start:engine

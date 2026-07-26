@@ -502,6 +502,7 @@ export interface EngineSettings {
   readonly numSearchThreads: number
   readonly chosenMoveTemperature?: number
   readonly wideRootNoise?: number
+  readonly playoutDoublingAdvantage?: number
   readonly rules: Rules
   readonly komi: number
   readonly humanSLProfile?: HumanSLProfile

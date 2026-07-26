@@ -269,6 +269,7 @@ export function App() {
       humanSLProfile: engineSettings.humanSLProfile,
       chosenMoveTemperature: engineSettings.chosenMoveTemperature,
       wideRootNoise: engineSettings.wideRootNoise,
+      playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
       boardSize,
     }
   }, [engineSettings, boardSize])
@@ -286,6 +287,7 @@ export function App() {
       humanSLProfile: engineSettings.humanSLProfile,
       chosenMoveTemperature: engineSettings.chosenMoveTemperature,
       wideRootNoise: engineSettings.wideRootNoise,
+      playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
       boardSize,
     }
   }, [engineSettings, boardSize])

@@ -30,3 +30,4 @@ test-results/
 
 # OMO (ephemeral session/state artifacts)
 .omo/
+.playwright-mcp/

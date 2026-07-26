@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "bash scripts/dev.sh",
     "start:engine": "bun run src/server/gtp-bridge.ts",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

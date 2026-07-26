@@ -91,8 +91,8 @@ describe('normalizeSettings', () => {
   })
 
   test('human play style derives maxVisits from difficulty', () => {
-    const result = normalizeSettings({ playStyle: 'human', maxVisits: 500 })
-    expect(result.maxVisits).toBe(25)
+    const result = normalizeSettings({ playStyle: 'human', maxVisits: 500, difficulty: 10 })
+    expect(result.maxVisits).toBe(10)
   })
 
   test('derives humanSLProfile from difficulty when missing', () => {
@@ -103,6 +103,18 @@ describe('normalizeSettings', () => {
   test('invalid rules falls back to korean', () => {
     const result = normalizeSettings({ rules: 'invalid' as never })
     expect(result.rules).toBe('korean')
+  })
+
+  test('human play style maps difficulty to playoutDoublingAdvantage', () => {
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 20 }).playoutDoublingAdvantage).toBe(-3.0)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 12 }).playoutDoublingAdvantage).toBe(-2.0)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 8 }).playoutDoublingAdvantage).toBe(-1.0)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 3 }).playoutDoublingAdvantage).toBe(-0.5)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 1 }).playoutDoublingAdvantage).toBe(0.0)
+  })
+
+  test('strong play style forces playoutDoublingAdvantage 0.0', () => {
+    expect(normalizeSettings({ playStyle: 'strong', difficulty: 20 }).playoutDoublingAdvantage).toBe(0.0)
   })
 })
 
@@ -127,6 +139,7 @@ describe('loadSettings / saveSettings', () => {
       humanSLProfile: 'rank_5k',
       chosenMoveTemperature: 0,
       wideRootNoise: 0,
+      playoutDoublingAdvantage: 0,
     }
     saveSettings(custom)
     const loaded = loadSettings()
@@ -209,7 +222,7 @@ describe('EngineSettings component', () => {
     fireEvent.click(humanBtn)
     const newSettings = onChange.mock.calls[0]![0] as EngineSettingsType
     expect(newSettings.playStyle).toBe('human')
-    expect(newSettings.maxVisits).toBe(25)
+    expect(newSettings.maxVisits).toBe(10)
     expect(newSettings.humanSLProfile).toBe('rank_10k')
   })
 

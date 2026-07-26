@@ -201,6 +201,9 @@ export async function initializeEngine(settings: EngineSettings): Promise<void> 
   if (settings.wideRootNoise !== undefined) {
     await setEngineParam('wideRootNoise', settings.wideRootNoise)
   }
+  if (settings.playoutDoublingAdvantage !== undefined) {
+    await setEngineParam('playoutDoublingAdvantage', settings.playoutDoublingAdvantage)
+  }
 }
 
 export async function requestMove(
@@ -234,6 +237,9 @@ export async function requestMove(
     }
     if (settings.wideRootNoise !== undefined) {
       await setEngineParam('wideRootNoise', settings.wideRootNoise)
+    }
+    if (settings.playoutDoublingAdvantage !== undefined) {
+      await setEngineParam('playoutDoublingAdvantage', settings.playoutDoublingAdvantage)
     }
   }
 
@@ -288,6 +294,9 @@ export async function requestAnalysis(
   }
   if (settings.wideRootNoise !== undefined) {
     body.wideRootNoise = settings.wideRootNoise
+  }
+  if (settings.playoutDoublingAdvantage !== undefined) {
+    body.playoutDoublingAdvantage = settings.playoutDoublingAdvantage
   }
 
   body.includeOwnership = true

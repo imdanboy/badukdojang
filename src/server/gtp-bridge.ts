@@ -32,6 +32,7 @@ export interface AnalyzeRequest {
   readonly maxTime?: number;
   readonly humanSLProfile?: string;
   readonly wideRootNoise?: number;
+  readonly playoutDoublingAdvantage?: number;
   readonly signal?: AbortSignal;
 }
 
@@ -480,7 +481,7 @@ export class KataGoBridge {
   }
 
   private async doAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-    const { boardSize, moves, komi, maxVisits, maxTime, humanSLProfile, wideRootNoise, includeOwnership, signal } =
+    const { boardSize, moves, komi, maxVisits, maxTime, humanSLProfile, wideRootNoise, playoutDoublingAdvantage, includeOwnership, signal } =
       request;
 
     if (this.analysisProcess === null) {
@@ -514,10 +515,11 @@ export class KataGoBridge {
       (query as unknown as Record<string, unknown>).maxTime = maxTime;
     }
     const q = query as unknown as Record<string, unknown>;
-    if (humanSLProfile !== undefined || wideRootNoise !== undefined) {
+    if (humanSLProfile !== undefined || wideRootNoise !== undefined || playoutDoublingAdvantage !== undefined) {
       const overrides: Record<string, unknown> = {};
       if (humanSLProfile !== undefined) overrides.humanSLProfile = humanSLProfile;
       if (wideRootNoise !== undefined) overrides.wideRootNoise = wideRootNoise;
+      if (playoutDoublingAdvantage !== undefined) overrides.playoutDoublingAdvantage = playoutDoublingAdvantage;
       q.overrideSettings = overrides;
     }
 

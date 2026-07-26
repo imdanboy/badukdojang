@@ -149,6 +149,33 @@ describe('katagoAdapter', () => {
   })
 
   describe('requestAnalysis', () => {
+    test('sends playoutDoublingAdvantage in body when set', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          id: 'analyze',
+          winrate: 0.5,
+          scoreLead: 0,
+          completed: true,
+        }),
+      )
+
+      const tree = createGameTree(19)
+      const settings: EngineSettings = {
+        maxTime: 10,
+        maxVisits: 100,
+        numSearchThreads: 2,
+        rules: 'japanese',
+        komi: 7.5,
+        humanSLProfile: 'rank_10k',
+        playoutDoublingAdvantage: -1.5,
+      }
+
+      await requestAnalysis(tree, 1, settings)
+
+      const calls = fetchMock.mock.calls as [string, RequestInit][]
+      const body = JSON.parse(calls[0]![1].body as string)
+      expect(body.playoutDoublingAdvantage).toBe(-1.5)
+    })
     test('returns winrate, scoreLead, ownership arrays', async () => {
       const analyzeResponse: AnalyzeResponse = {
         id: 'analyze',
