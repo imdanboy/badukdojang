@@ -1,0 +1,15 @@
+diff --git a/packages/gametree/src/index.ts b/packages/gametree/src/index.ts
+index bc71905..fdb4b4c 100644
+--- a/packages/gametree/src/index.ts
++++ b/packages/gametree/src/index.ts
+@@ -162,7 +162,9 @@ export class GameTree<T = Record<string, Primitive[]>> {
+ 
+     if (node == null) return null;
+     if (step === 0) return node;
+-    if (step < 0 && node.parentId != null) return this.navigate(node.parentId, step + 1, currents);
++    if (step < 0) {
++      return node.parentId != null ? this.navigate(node.parentId, step + 1, currents) : null;
++    }
+ 
+     const nextId =
+       currents[node.id] != null

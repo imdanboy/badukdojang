@@ -3,7 +3,7 @@ title: KataGo 엔진 통합 — 사전 연구
 description: Phase-2 엔진 연동 전 조사 — KataGo 기능/모델/튜닝, Pachi·GNU Go 약 엔진 비교, badukdojang 통합 지점
 tags: [katago, engines, planning, research]
 created: 2026-07-18
-updated: 2026-07-18 (설치·사용법 섹션 추가)
+updated: 2026-08-03 (React 19/Kaya 마이그레이션 후 setup 절차 반영)
 ---
 
 # KataGo 엔진 통합 — 사전 연구
@@ -25,6 +25,8 @@ updated: 2026-07-18 (설치·사용법 섹션 추가)
 ## 설치 및 사용법 (없으면 AI 대국 불가)
 
 > ⚠️ **이 섹션은 필수입니다.** 설정을 안 하면 설정 패널의 "엔진 켜짐" 토글을 눌러도 아무 일도 일어나지 않습니다.
+> 
+> 전체 설치 흐름은 [setup-and-usage](setup-and-usage.md) 노트에 정리되어 있다. 이 섹션은 KataGo 엔진 설정에 집중한다.
 
 ### 사전 준비
 
@@ -36,7 +38,23 @@ brew install katago
 katago version   # 1.16.x 이상 확인
 ```
 
-### 1단계: 모델 파일 다운로드 (한 번만)
+### 1단계: Kaya 의존성 설치 (badukdojang 전용)
+
+마이그레이션 후 badukdojang은 `@kaya/*` 패키지를 Git Submodule(`third_party/kaya`)에서 빌드·링크한다.
+
+```bash
+# 저장소 클론 시
+# git clone --recursive <repo>
+
+# 또는 clone 후
+# git submodule update --init --recursive
+
+bun run setup
+```
+
+> `bun install`만으로는 `@kaya/*` `link:` 의존성을 해석할 수 없다. 반드시 `bun run setup`을 먼저 실행해야 한다.
+
+### 2단계: 모델 파일 다운로드 (한 번만)
 
 ```bash
 mkdir -p ~/katago-models
@@ -50,7 +68,7 @@ curl -L -o ~/katago-models/b18c384nbt-humanv0.bin.gz \
   https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz
 ```
 
-### 2단계: 환경변수 설정 (터미널마다, 또는 `~/.zshrc`에 추가)
+### 3단계: 환경변수 설정 (터미널마다, 또는 `~/.zshrc`에 추가)
 
 ```bash
 export KATAGO_MODEL_PATH="$HOME/katago-models/kata1-b18c384nbt.bin.gz"
@@ -61,7 +79,7 @@ export HUMAN_MODEL_PATH="$HOME/katago-models/b18c384nbt-humanv0.bin.gz"
 # export PORT=8787
 ```
 
-### 3단계: 실행
+### 4단계: 실행
 
 **한 번에 (권장):**
 ```bash
@@ -79,7 +97,7 @@ bun run start:engine
 bun run dev
 ```
 
-### 4단계: 브라우저에서 확인
+### 5단계: 브라우저에서 확인
 
 개발자 도구 콘솔(F12)에서:
 
@@ -94,6 +112,7 @@ await fetch('/api/gtp/health').then(r => r.json())
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
+| `bun install`에서 `@kaya/* not linked` | `bun run setup` 미실행 | `bun run setup` 실행 |
 | `"엔진이 꺼져 있습니다"` 토스트 | bridge 서버 미실행 | Terminal 1에서 `bun run start:engine` |
 | `"엔진 연결 실패"` / 503 | bridge 켜졌는데 KataGo spawn 실패 | `KATAGO_MODEL_PATH` 환경변수 확인, 모델 파일 존재 확인 (`ls ~/katago-models/`) |
 | `"Engine health check failed"` 콘솔 에러 | Vite proxy 실패 | `bun run dev`를 `bun run start:engine` **이후**에 실행 |
@@ -248,24 +267,25 @@ humanSLChosenMoveProp = 1.0     # KataGo MCTS 수 대신 인간 수를 둘 확�
 
 탐색자 서브에이전트가 `path:line` 인증으로 매핑.
 
-### 프로젝트 형태
+### 프로젝트 형태 (마이그레이션 후)
 
-- **순수 웹 SPA** — Preact 10 + Vite 8 + Bun + TypeScript (strict). **Tauri·Electron 없음.** `package.json:15-32`는 Preact+Sabaki 4종+툴링만.
-- 디렉토리: `src/`(앱), `public/`(에셋), `e2e/`(Playwright), `docs/`(위키)
-- 빌드: `bun run dev` (Vite :5173), `bun run test` (Vitest jsdom), `bun run e2e` (Playwright chromium 1 스펙 12 테스트)
+- **순수 웹 SPA** — React 19 + TypeScript (strict) + Vite 8 + Bun. **Tauri·Electron 없음.**
+- 코어 라이브러리: `@kaya/goboard`, `@kaya/gametree`, `@kaya/sgf`, `@kaya/shudan`, `@kaya/themes` (Git Submodule `third_party/kaya`에서 빌드 후 Bun 링크)
+- 디렉토리: `src/`(앱), `e2e/`(Playwright), `docs/`(위키), `third_party/kaya/`(Kaya submodule)
+- 빌드/테스트: `bun run dev`, `bun run build`, `bun run test:run`, `bun run e2e`
 
 ### 엔진 통합 natural chokepoint
 
-- `src/lib/gameState.ts:28` — `createGameState(size, initialTree?)`. 상태 = `{ board: GoBoard, currentPlayer: 1|-1, lastMove, gameTree, ... }`. `makeMove`/`pass`/`undo`/`redo`/`getSignMap`. ko/자살/덮기는 `@sabaki/go-board`가 강제.
-- `src/lib/gameTree.ts:155` — `getMoveList(tree)` returns `{ vertex: Vertex | 'pass', sign: 1|-1 }[]` → **엔진이 히스토리 재생에 그대로 기대하는 shape**
-- `src/lib/sgfIo.ts:7` — `treeToSGF(tree, size)` — KataGo에 SGF를 한 번에 던지는 통로
-- `src/App.tsx:55-69` — `handleVertexClick`: click → `makeMove` → `setSignMap(getSignMap())`. `handleEngineMove(vertex)` 미러 슬롯이 똑같이 동작
-- `src/components/ControlBar.tsx:15-31, 147` — `Pass` 옆에 "AI 수"/"힌트" 버튼 추가 자연스러운 위치. 인터페이스 `onEngineMove?: () => void` 신규 prop
-- `vite.config.ts:1-7` — **`worker:` 블록 없음**. Web Worker(논블로킹 KataGo JSON 처리 추천) 도입 시 `worker: { format: 'es' }` 추가 필수
+- `src/lib/gameState.ts` — `createGameState(size, initialTree?)`. 상태 = `{ board, currentPlayer, lastMove, gameTree, ... }`. `makeMove`/`pass`/`undo`/`redo`/`getSignMap`.
+- `src/lib/gameTree.ts` — `getMoveList(tree)` returns `{ vertex: Vertex | 'pass', sign: 1|-1 }[]` → **엔진이 히스토리 재생에 그대로 기대하는 shape**
+- `src/lib/sgfIo.ts` — `treeToSGF(tree, size)` — KataGo에 SGF를 한 번에 던지는 통로
+- `src/App.tsx` — `handleVertexClick`: click → `makeMove` → `setSignMap(getSignMap())`. 엔진 수도 동일 파이프라인 사용
+- `src/components/ControlBar.tsx` — `Pass` 옆에 "AI 수"/"힌트" 버튼 추가 자연스러운 위치
+- `src/lib/engine/katagoAdapter.ts` — KataGo GTP/analysis JSON 응답 파싱, `Vertex`/`SignMap` 변환, Human-SL/Strong 분기
 
-### 현재 엔진 코드 zero
+### 현재 엔진 코드
 
-`katago|gtp|gnugo|pachi|leela|engine|ai|scoring|score|count|territory` 대소문자 무시 grep — 모든 매치는 Phase-2 문서(`docs/wiki/baduk-mvp.md:148`, `docs/ideas.md:*`), 사운드 인자(`src/lib/sound.ts:63`), UI element count(`scripts/`), 생성된 HTML 보고서. **`src/` 내 `engine/`, `ai/`, `gtp/`, `Worker`, `WebSocket`, `tauri`, `electron` import 없음**.
+`src/lib/engine/`에 KataGo 전용 어댑터가 구현되어 있으며, GTP 브리지 서버(`src/server/gtp-bridge.ts`)와 통신한다. 현재는 KataGo 단일 엔진만 지원하며, GTP 브리지 추상화(다중 엔진)는 Phase-2 로드맵에 남아 있다.
 
 ### 추천 통합 지점 (5)
 
@@ -273,7 +293,7 @@ humanSLChosenMoveProp = 1.0     # KataGo MCTS 수 대신 인간 수를 둘 확�
 2. **`src/lib/gameTree.ts`** (+`sgfIo.ts`) — outbound 표면 (`play`/`undo`/SGF-once)
 3. **`src/App.tsx`** — `handleVertexClick` 미러로 `handleEngineMove` + "engine thinking" 오버레이 상태
 4. **`src/components/ControlBar.tsx`** — "AI 수"/"힌트" 버튼 + 상태 텍스트
-5. **신규 `src/lib/engine/`** — `engineBridge.ts`(Worker/fetch/EventSource transport), `katagoAdapter.ts`(`SignMap`+`Player` ⇄ KataGo GTP), `types.ts`(`EngineMoveRequest` 등)
+5. **`src/lib/engine/`** — `engineBridge.ts`(Worker/fetch/EventSource transport), `katagoAdapter.ts`(`SignMap`+`Player` ⇄ KataGo GTP), `types.ts`(`EngineMoveRequest` 등)
 
 ## 6. 통합 플랜 작성 시 해결 필요 7개 의사결정 (보류)
 

@@ -1,0 +1,13 @@
+diff --git a/packages/themes/package.json b/packages/themes/package.json
+index 670b232..33cd744 100644
+--- a/packages/themes/package.json
++++ b/packages/themes/package.json
+@@ -6,7 +6,7 @@
+   "module": "./dist/index.js",
+   "types": "./dist/index.d.ts",
+   "scripts": {
+-    "build": "tsc --build --force",
++    "build": "tsc --build --force && cp -R src/hikaru/assets dist/hikaru/ && cp -R src/shell-slate/assets dist/shell-slate/ && cp -R src/yunzi/assets dist/yunzi/ && cp -R src/happy-stones/assets dist/happy-stones/ && cp -R src/baduktv/assets dist/baduktv/ && cp src/kifu/theme.json dist/kifu/",
+     "dev": "tsc --build --force --watch",
+     "type-check": "tsc --noEmit"
+   },
