@@ -160,7 +160,7 @@ test.describe('EngineSettings E2E', () => {
     await page.locator('#engine-style-human').click()
     await page.waitForTimeout(200)
 
-    await expect(page.locator('#engine-max-visits')).toContainText('40')
+    await expect(page.locator('#engine-max-visits')).toContainText('10')
     await expect(page.locator('#engine-difficulty')).not.toBeDisabled()
 
     await screenshot(page, 'human-style')

@@ -40,7 +40,7 @@ test.describe('Scoring E2E', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ response: 'B+3.5' }),
+          body: JSON.stringify({ response: 'W+7.5' }),
         })
         return
       }
@@ -51,7 +51,7 @@ test.describe('Scoring E2E', () => {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ response: 'D4' }),
+            body: JSON.stringify({ response: 'D16' }),
           })
           return
         }
@@ -143,7 +143,7 @@ test.describe('Scoring E2E', () => {
     await page.locator('#score-btn').click()
     await expect(page.locator('text=계가 결과')).toBeVisible({ timeout: 10000 })
 
-    const deadStone = page.locator('.shudan-vertex.shudan-marker_cross[data-x="3"][data-y="3"]')
+    const deadStone = page.locator('.shudan-vertex[data-x="3"][data-y="3"].shudan-dimmed')
     await expect(deadStone).toHaveCount(1)
 
     await clickVertex(page, 3, 3, 19)

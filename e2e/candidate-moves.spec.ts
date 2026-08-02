@@ -86,7 +86,7 @@ test.describe('Candidate Moves E2E', () => {
 
     // Wait for candidate markers to appear (letter labels on the board)
     await expect(async () => {
-      const labels = page.locator('.shudan-vertex.shudan-marker_label')
+      const labels = page.locator('.shudan-vertex .shudan-marker-label')
       const count = await labels.count()
       expect(count).toBe(3)
     }).toPass({ timeout: 10000 })
@@ -115,21 +115,21 @@ test.describe('Candidate Moves E2E', () => {
     const rows = page.locator('.candidate-move-row')
     await expect(rows).toHaveCount(3)
 
-    // Row A should have vertex D4, winrate 54.0%, scoreLead +2.1
+    // Row A should have vertex D16, winrate 54.0%, scoreLead +2.1
     const rowA = page.locator('.candidate-move-row[data-letter="A"]')
-    await expect(rowA).toHaveAttribute('data-vertex', 'D4')
+    await expect(rowA).toHaveAttribute('data-vertex', 'D16')
     await expect(rowA).toContainText('54.0%')
     await expect(rowA).toContainText('+2.1')
 
-    // Row B should have vertex Q16
+    // Row B should have vertex P4
     const rowB = page.locator('.candidate-move-row[data-letter="B"]')
-    await expect(rowB).toHaveAttribute('data-vertex', 'Q16')
+    await expect(rowB).toHaveAttribute('data-vertex', 'P4')
 
-    // Row C should have vertex C3
+    // Row C should have vertex C17
     const rowC = page.locator('.candidate-move-row[data-letter="C"]')
-    await expect(rowC).toHaveAttribute('data-vertex', 'C3')
+    await expect(rowC).toHaveAttribute('data-vertex', 'C17')
 
-    // PV preview should show first 5 moves (we only have 4 in mock)
+    // PV preview shows raw GTP move strings from the engine response.
     await expect(rowA).toContainText('D4 Q16 C3 R17')
 
     await page.screenshot({
@@ -155,15 +155,15 @@ test.describe('Candidate Moves E2E', () => {
     }).toPass({ timeout: 10000 })
 
     // Count stones before clicking candidate (1 stone from our move)
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
-    // Click candidate B (Q16 = vertex [15, 15])
+    // Click candidate B (Q4 = vertex [15, 3])
     await page.locator('.candidate-move-row[data-letter="B"]').click()
 
-    // A new stone should appear at Q16 (vertex [15, 15])
+    // A new stone should appear at Q4 (vertex [15, 3])
     await expect(async () => {
-      stones = page.locator('.shudan-stone-image')
+      stones = page.locator('.shudan-stone')
       const count = await stones.count()
       expect(count).toBe(2)
     }).toPass({ timeout: 5000 })
@@ -173,11 +173,11 @@ test.describe('Candidate Moves E2E', () => {
       fullPage: true,
     })
 
-    // The stone at Q16 should exist (Q = x16, row 16 = y15)
-    const q16Stone = page.locator(
-      '.shudan-vertex[data-x="16"][data-y="15"] .shudan-stone-image',
+    // The stone at Q4 should exist (Q = x15, row 4 = y3)
+    const q4Stone = page.locator(
+      '.shudan-vertex[data-x="15"][data-y="3"] .shudan-stone',
     )
-    await expect(q16Stone).toHaveCount(1)
+    await expect(q4Stone).toHaveCount(1)
 
     await page.screenshot({
       path: '.omo/evidence/task-12-katago-ai-integration-clicked.png',

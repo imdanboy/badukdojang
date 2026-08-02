@@ -31,18 +31,18 @@ test.describe('Board E2E', () => {
     const board = page.locator('.shudan-goban')
     await expect(board).toBeVisible()
 
-    const gridLines = page.locator('.shudan-gridline')
+    const gridLines = page.locator('.shudan-grid line')
     await expect(gridLines).toHaveCount(38)
 
-    const hoshis = page.locator('.shudan-hoshi')
+    const hoshis = page.locator('.shudan-grid circle')
     await expect(hoshis).toHaveCount(9)
 
-    const coordX = page.locator('.shudan-coordx')
-    const coordY = page.locator('.shudan-coordy')
+    const coordX = page.locator('.shudan-coord-x')
+    const coordY = page.locator('.shudan-coord-y')
     await expect(coordX).toHaveCount(2)
     await expect(coordY).toHaveCount(2)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     await screenshot(page, 'empty-board')
@@ -54,13 +54,13 @@ test.describe('Board E2E', () => {
 
     await page.waitForTimeout(200)
 
-    const gridLines = page.locator('.shudan-gridline')
+    const gridLines = page.locator('.shudan-grid line')
     await expect(gridLines).toHaveCount(26)
 
     const vertices = page.locator('.shudan-vertex')
     await expect(vertices).toHaveCount(13 * 13)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     await screenshot(page, '13x13-board')
@@ -70,10 +70,10 @@ test.describe('Board E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
-    const blackStone = page.locator('.shudan-vertex.shudan-sign_1 .shudan-stone-image')
+    const blackStone = page.locator('.shudan-vertex.shudan-sign_1 .shudan-stone')
     await expect(blackStone).toHaveCount(1)
 
     await screenshot(page, 'place-stone')
@@ -91,7 +91,7 @@ test.describe('Board E2E', () => {
 
     await page.waitForTimeout(200)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(6)
 
     await screenshot(page, 'capture')
@@ -101,13 +101,13 @@ test.describe('Board E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     await page.locator('button:has-text("Undo")').click()
     await page.waitForTimeout(200)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     await screenshot(page, 'undo')
@@ -120,13 +120,13 @@ test.describe('Board E2E', () => {
     await page.locator('button:has-text("Undo")').click()
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     await page.locator('button:has-text("Redo")').click()
     await page.waitForTimeout(200)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     await screenshot(page, 'redo')
@@ -143,7 +143,7 @@ test.describe('Board E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    const whiteStone = page.locator('.shudan-vertex.shudan-sign_-1 .shudan-stone-image')
+    const whiteStone = page.locator('.shudan-vertex.shudan-sign_-1 .shudan-stone')
     await expect(whiteStone).toHaveCount(1)
 
     await screenshot(page, 'pass')
@@ -164,7 +164,7 @@ test.describe('Board E2E', () => {
     await fileInput.setInputFiles('e2e/fixtures/test-game.sgf')
     await page.waitForTimeout(500)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(5)
 
     const turnIndicator = page.locator('text=To Play:')
@@ -174,8 +174,8 @@ test.describe('Board E2E', () => {
   })
 
   test('(j) toggle coordinates hides and shows labels', async ({ page }) => {
-    const coordX = page.locator('.shudan-coordx')
-    const coordY = page.locator('.shudan-coordy')
+    const coordX = page.locator('.shudan-coord-x')
+    const coordY = page.locator('.shudan-coord-y')
 
     await expect(coordX).toHaveCount(2)
     await expect(coordY).toHaveCount(2)
@@ -199,14 +199,14 @@ test.describe('Board E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     // Click same vertex again — should be rejected
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     await screenshot(page, 'occupied')
@@ -221,7 +221,7 @@ test.describe('Board E2E', () => {
     await clickVertex(page, 7, 7, 19) // B
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(5)
 
     // Undo 2 moves
@@ -230,7 +230,7 @@ test.describe('Board E2E', () => {
     await page.locator('button:has-text("Undo")').click()
     await page.waitForTimeout(200)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(3)
 
     // Save SGF
@@ -244,7 +244,7 @@ test.describe('Board E2E', () => {
     await page.locator('button:has-text("New Game")').click()
     await page.waitForTimeout(200)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     // Load the saved SGF back
@@ -253,7 +253,7 @@ test.describe('Board E2E', () => {
     await fileInput.setInputFiles('e2e/fixtures/test-game.sgf')
     await page.waitForTimeout(500)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(5)
 
     await screenshot(page, 'fullflow')

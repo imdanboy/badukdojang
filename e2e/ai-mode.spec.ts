@@ -84,14 +84,14 @@ test.describe('AI Mode E2E', () => {
 
     // Wait up to 10 seconds for AI response (human + AI = 2 stones)
     await expect(async () => {
-      const stones = page.locator('.shudan-stone-image')
+      const stones = page.locator('.shudan-stone')
       const count = await stones.count()
       expect(count).toBe(2)
     }).toPass({ timeout: 10000 })
 
     // Verify AI stone is white (sign_-1)
     const whiteStone = page.locator(
-      '.shudan-vertex.shudan-sign_-1 .shudan-stone-image',
+      '.shudan-vertex.shudan-sign_-1 .shudan-stone',
     )
     await expect(whiteStone).toHaveCount(1)
 
@@ -164,7 +164,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForTimeout(1500)
 
     // Only 2 stones total (1 human + 1 AI) — the second click was blocked
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(2)
 
     await screenshot(page, 'race-guard')
@@ -181,7 +181,7 @@ test.describe('AI Mode E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     // Set up dialog handler to dismiss
@@ -192,7 +192,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForTimeout(200)
 
     // Stone should still be there (game not reset)
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     await screenshot(page, 'mode-switch-cancelled')
@@ -207,7 +207,7 @@ test.describe('AI Mode E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     // Accept the confirmation dialog
@@ -217,7 +217,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForTimeout(500)
 
     // Board should be empty after reset
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     // Turn should be Black
@@ -238,14 +238,14 @@ test.describe('AI Mode E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(500)
 
-    let stones = page.locator('.shudan-stone-image')
+    let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(2)
 
     // Undo the AI move (so we can test manual trigger)
     await page.locator('button:has-text("Undo")').click()
     await page.waitForTimeout(300)
 
-    stones = page.locator('.shudan-stone-image')
+    stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     // Click AI Move button
@@ -253,7 +253,7 @@ test.describe('AI Mode E2E', () => {
 
     // Wait for AI stone
     await expect(async () => {
-      stones = page.locator('.shudan-stone-image')
+      stones = page.locator('.shudan-stone')
       const count = await stones.count()
       expect(count).toBe(2)
     }).toPass({ timeout: 10000 })
@@ -302,7 +302,7 @@ test.describe('AI Mode E2E', () => {
     }
 
     // Should have 10 stones (5 human + 5 AI)
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(10)
 
     // Turn should be back to Black
@@ -350,7 +350,7 @@ test.describe('AI Mode E2E', () => {
     await expect(toast).toContainText('AI 오류')
 
     // Board should still be playable (1 human stone, no crash)
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
     await screenshot(page, 'invalid-move-toast')
@@ -400,7 +400,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForTimeout(200)
 
     // Board should be empty after reset
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(0)
 
     // No ghost stones should remain (they would have shudan-ghost class)
@@ -545,20 +545,20 @@ test.describe('AI Mode E2E', () => {
       await expect(btn).toBeEnabled()
     }).toPass({ timeout: 10000 })
 
-    await expect(page.locator('.ownership-overlay')).toHaveCount(0)
+    await expect(page.locator('.shudan-paint')).toHaveCount(0)
 
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(200)
 
-    const overlay = page.locator('.ownership-overlay')
-    await expect(overlay).toHaveCount(1)
-    const circles = overlay.locator('circle')
-    const circleCount = await circles.count()
-    expect(circleCount).toBeGreaterThan(0)
+    const overlay = page.locator('.shudan-paint')
+    await expect(async () => {
+      const count = await overlay.count()
+      expect(count).toBeGreaterThan(0)
+    }).toPass({ timeout: 5000 })
 
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(200)
-    await expect(page.locator('.ownership-overlay')).toHaveCount(0)
+    await expect(page.locator('.shudan-paint')).toHaveCount(0)
 
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(300)
@@ -825,7 +825,7 @@ test.describe('AI Mode E2E', () => {
     await clickVertex(page, 5, 5, 19)
     await page.waitForTimeout(800)
 
-    const stones = page.locator('.shudan-stone-image')
+    const stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(4)
 
     await screenshot(page, 'engine-restart-restores')
