@@ -1,5 +1,5 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/preact'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { App } from './App.tsx'
 
 // Mock the KataGo adapter so tests don't hit the network.
@@ -54,7 +54,7 @@ vi.mock('./components/Board.tsx', () => {
       aiFlashVertex?: [number, number] | null
     }) => {
       const size = props.boardSize
-      const vertices: preact.JSX.Element[] = []
+      const vertices: React.JSX.Element[] = []
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           vertices.push(

@@ -1,5 +1,5 @@
-import GoBoard from '@sabaki/go-board'
-import type { SignMap, Vertex } from '@sabaki/go-board'
+import { GoBoard } from '@kaya/goboard'
+import type { SignMap, Vertex } from '@kaya/goboard'
 import {
   appendMove as appendMoveToTree,
   appendPass as appendPassToTree,

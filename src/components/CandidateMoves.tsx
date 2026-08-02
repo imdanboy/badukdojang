@@ -1,3 +1,4 @@
+import * as React from 'react'
 /*
  * CandidateMoves - Sidebar panel showing top-3 engine candidate moves.
  * Each row: letter badge (A/B/C), vertex, winrate%, scoreLead, PV preview.
@@ -6,7 +7,7 @@
  * Design system: matches ControlBar/EngineSettings dark panel
  * (#1a1a2e bg, #5a7fb5 accent, #e0e0e0 text, 8px radius, 600px max-width).
  */
-import type { Vertex } from '@sabaki/shudan'
+import type { Vertex } from '@kaya/goboard'
 
 export interface CandidateMove {
   /** Vertex [x, y] or 'pass'. 'resign' is filtered out upstream. */
@@ -50,7 +51,7 @@ function formatPvPreview(pv: readonly string[]): string {
   return pv.slice(0, PV_PREVIEW_LENGTH).join(' ')
 }
 
-const panelStyle: preact.JSX.CSSProperties = {
+const panelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
@@ -63,12 +64,12 @@ const panelStyle: preact.JSX.CSSProperties = {
   maxWidth: '600px',
 }
 
-const headerStyle: preact.JSX.CSSProperties = {
+const headerStyle: React.CSSProperties = {
   fontWeight: 'bold',
   fontSize: '15px',
 }
 
-const rowStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
+const rowStyle = (disabled: boolean): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
@@ -80,7 +81,7 @@ const rowStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
   transition: 'background 0.15s ease',
 })
 
-const letterBadgeStyle: preact.JSX.CSSProperties = {
+const letterBadgeStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -94,17 +95,17 @@ const letterBadgeStyle: preact.JSX.CSSProperties = {
   flexShrink: 0,
 }
 
-const vertexStyle: preact.JSX.CSSProperties = {
+const vertexStyle: React.CSSProperties = {
   fontWeight: 'bold',
   minWidth: '40px',
 }
 
-const statStyle: preact.JSX.CSSProperties = {
+const statStyle: React.CSSProperties = {
   minWidth: '56px',
   fontVariantNumeric: 'tabular-nums',
 }
 
-const pvStyle: preact.JSX.CSSProperties = {
+const pvStyle: React.CSSProperties = {
   flex: 1,
   opacity: 0.7,
   fontSize: '12px',

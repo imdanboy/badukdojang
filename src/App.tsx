@@ -4,9 +4,10 @@
  * Clicking an empty intersection places a stone. Illegal moves flash red border.
  * AI mode: after human plays, engine auto-generates a response.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import type { SignMap } from '@sabaki/go-board'
-import type { Map, Marker, Vertex } from '@sabaki/shudan'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { SignMap, Vertex } from '@kaya/goboard'
+import type { BoardMap, Marker } from '@kaya/shudan'
+import { BoardThemeProvider, useBoardTheme } from '@kaya/themes'
 import { Board, type ThemeName } from './components/Board.tsx'
 import { ControlBar, type BoardSize } from './components/ControlBar.tsx'
 import {
@@ -41,13 +42,21 @@ import type { EngineSettings as EngineEngineSettings } from './lib/engine/types.
 
 export type GameMode = 'selfplay' | 'ai'
 
+function ThemeSync({ theme }: { theme: ThemeName }) {
+  const { setBoardTheme } = useBoardTheme()
+  useEffect(() => {
+    setBoardTheme(theme)
+  }, [theme, setBoardTheme])
+  return null
+}
+
 export function App() {
   const [boardSize, setBoardSize] = useState<BoardSize>(19)
   const [gameState, setGameState] = useState(() => createGameState(19))
   const [signMap, setSignMap] = useState<SignMap>(() => gameState.getSignMap())
   const [flashTrigger, setFlashTrigger] = useState(0)
   const [showCoordinates, setShowCoordinates] = useState(true)
-  const [themeName, setThemeName] = useState<ThemeName>('shinkaya')
+  const [themeName, setThemeName] = useState<ThemeName>('hikaru')
   const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled())
   const [engineSettings, setEngineSettings] = useState<EngineSettingsType>(() =>
     normalizeSettings(loadSettings()),
@@ -135,9 +144,9 @@ export function App() {
     return result
   }, [scoringResult, manualOverrides])
 
-  const scoringMarkerMap = useMemo<Map<Marker | null> | undefined>(() => {
+  const scoringMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     if (!isScoring || effectiveDeadStones.length === 0) return undefined
-    const map: Map<Marker | null> = signMap.map((row) => row.map(() => null))
+    const map: BoardMap<Marker | null> = signMap.map((row) => row.map(() => null))
     for (const [x, y] of effectiveDeadStones) {
       const row = map[y]
       if (row !== undefined && x >= 0 && x < row.length) {
@@ -149,10 +158,10 @@ export function App() {
 
   // Build markerMap: a 2D array (indexed [y][x]) with a single 'point'
   // marker at the last-move position, null everywhere else.
-  const markerMap = useMemo<Map<Marker | null> | undefined>(() => {
+  const markerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     if (gameState.lastMove === null) return undefined
     const [lx, ly] = gameState.lastMove
-    const map: Map<Marker | null> = signMap.map((row) =>
+    const map: BoardMap<Marker | null> = signMap.map((row) =>
       row.map(() => null),
     )
     const row = map[ly]
@@ -162,9 +171,9 @@ export function App() {
     return map
   }, [signMap, gameState.lastMove])
 
-  const combinedMarkerMap = useMemo<Map<Marker | null> | undefined>(() => {
+  const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     if (scoringMarkerMap === undefined && markerMap === undefined) return undefined
-    const map: Map<Marker | null> = signMap.map((row) => row.map(() => null))
+    const map: BoardMap<Marker | null> = signMap.map((row) => row.map(() => null))
     if (markerMap !== undefined) {
       for (let y = 0; y < map.length; y++) {
         for (let x = 0; x < map[y]!.length; x++) {
@@ -548,7 +557,7 @@ export function App() {
     }
   }, [gameState, showToast, getAnalysisSettings, engineSettings.enabled])
 
-  const handleVertexClick = (_evt: MouseEvent, vertex: Vertex) => {
+  const handleVertexClick = (_evt: React.MouseEvent, vertex: Vertex) => {
     if (isAiThinkingRef.current) return
     if (isScoring) {
       handleToggleDead(vertex)
@@ -615,8 +624,8 @@ export function App() {
     downloadSGF(gameState.gameTree, filename, boardSize)
   }
 
-  const handleFileChange = async (e: Event) => {
-    const input = e.currentTarget as HTMLInputElement
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget
     const file = input.files?.[0]
     if (!file) return
 
@@ -746,9 +755,11 @@ export function App() {
   }, [])
 
   return (
-    <div
-      id="app-root"
-      style={{
+    <BoardThemeProvider>
+      <ThemeSync theme={themeName} />
+      <div
+        id="app-root"
+        style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -807,6 +818,7 @@ export function App() {
         ownership={ownership}
         showOwnership={showOwnership}
         candidateMoves={candidateVertices}
+        dimmedVertices={isScoring ? effectiveDeadStones : undefined}
       />
       <AnalysisPanel
         analysis={winrateAnalysis}
@@ -930,5 +942,6 @@ export function App() {
         </div>
       )}
     </div>
+    </BoardThemeProvider>
   )
 }

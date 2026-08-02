@@ -1,3 +1,4 @@
+import * as React from 'react'
 /*
  * EngineSettings - Collapsible engine settings panel (UI skeleton).
  * Sits below ControlBar. Controls engine ON/OFF, thinking time,
@@ -6,7 +7,7 @@
  *
  * No engine connection — UI-only skeleton.
  */
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useState } from 'react'
 
 // --- Types -----------------------------------------------------------------
 
@@ -213,7 +214,7 @@ export function normalizeSettings(
 
 // --- Style helpers (match ControlBar design system) ------------------------
 
-const panelStyle: preact.JSX.CSSProperties = {
+const panelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '12px',
@@ -226,7 +227,7 @@ const panelStyle: preact.JSX.CSSProperties = {
   maxWidth: '600px',
 }
 
-const headerStyle: preact.JSX.CSSProperties = {
+const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -235,19 +236,19 @@ const headerStyle: preact.JSX.CSSProperties = {
   userSelect: 'none',
 }
 
-const sectionStyle: preact.JSX.CSSProperties = {
+const sectionStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
   flexWrap: 'wrap',
 }
 
-const labelStyle: preact.JSX.CSSProperties = {
+const labelStyle: React.CSSProperties = {
   opacity: 0.7,
   minWidth: '80px',
 }
 
-const selectStyle: preact.JSX.CSSProperties = {
+const selectStyle: React.CSSProperties = {
   padding: '6px 8px',
   border: '1px solid #3b3b5c',
   borderRadius: '4px',
@@ -257,21 +258,21 @@ const selectStyle: preact.JSX.CSSProperties = {
   cursor: 'pointer',
 }
 
-const sliderStyle: preact.JSX.CSSProperties = {
+const sliderStyle: React.CSSProperties = {
   cursor: 'pointer',
   accentColor: '#5a7fb5',
   flex: '1',
   minWidth: '120px',
 }
 
-const dividerStyle: preact.JSX.CSSProperties = {
+const dividerStyle: React.CSSProperties = {
   width: '100%',
   height: '1px',
   background: '#3b3b5c',
   margin: '0',
 }
 
-const btnStyle = (active: boolean): preact.JSX.CSSProperties => ({
+const btnStyle = (active: boolean): React.CSSProperties => ({
   padding: '6px 14px',
   border: 'none',
   borderRadius: '4px',
@@ -303,19 +304,19 @@ export function EngineSettings({
 
   const toggleExpanded = () => setExpanded((prev) => !prev)
 
-  const handleThinkingTime = (e: Event) => {
-    const value = Number((e.currentTarget as HTMLInputElement).value)
+  const handleThinkingTime = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.currentTarget.value)
     update({ thinkingTime: clamp(value, MIN_THINKING_TIME, MAX_THINKING_TIME) })
   }
 
-  const handleDifficulty = (e: Event) => {
-    const value = Number((e.currentTarget as HTMLInputElement).value)
+  const handleDifficulty = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.currentTarget.value)
     const clamped = clamp(value, MIN_DIFFICULTY, MAX_DIFFICULTY)
     update({ difficulty: clamped, humanSLProfile: difficultyToProfile(clamped), manualTemperature: -1 })
   }
 
-  const handleRules = (e: Event) => {
-    const value = (e.currentTarget as HTMLSelectElement).value as Rules
+  const handleRules = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.currentTarget.value as Rules
     update({ rules: value })
   }
 
@@ -403,7 +404,7 @@ export function EngineSettings({
 
           {/* Thinking time slider */}
           <div style={sectionStyle}>
-            <label for="engine-thinking-time" style={labelStyle}>
+            <label   htmlFor="engine-thinking-time" style={labelStyle}>
               생각 시간
             </label>
             <input
@@ -426,7 +427,7 @@ export function EngineSettings({
 
           {/* Difficulty slider */}
           <div style={sectionStyle}>
-            <label for="engine-difficulty" style={labelStyle}>
+            <label   htmlFor="engine-difficulty" style={labelStyle}>
               난이도
             </label>
             <input
@@ -452,7 +453,7 @@ export function EngineSettings({
 
           {/* Temperature slider */}
           <div style={sectionStyle}>
-            <label for="engine-temperature" style={labelStyle}>
+            <label   htmlFor="engine-temperature" style={labelStyle}>
               랜덤 온도
             </label>
             <input
@@ -462,8 +463,8 @@ export function EngineSettings({
               max={10}
               step={0.1}
               value={settings.manualTemperature >= 0 ? settings.manualTemperature : settings.chosenMoveTemperature}
-              onChange={(e) => {
-                const value = Number((e.currentTarget as HTMLInputElement).value)
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = Number(e.currentTarget.value)
                 update({ manualTemperature: value })
               }}              
               disabled={difficultyDisabled}
@@ -482,7 +483,7 @@ export function EngineSettings({
 
           {/* Rules dropdown */}
           <div style={sectionStyle}>
-            <label for="engine-rules" style={labelStyle}>
+            <label   htmlFor="engine-rules" style={labelStyle}>
               규칙
             </label>
             <select

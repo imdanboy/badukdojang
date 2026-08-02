@@ -27,6 +27,7 @@ dist-ssr/
 coverage/
 playwright-report/
 test-results/
+e2e-report/
 
 # OMO (ephemeral session/state artifacts)
 .omo/

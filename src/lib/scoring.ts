@@ -1,5 +1,5 @@
-import type { Vertex } from '@sabaki/go-board'
-import type { SignMap } from '@sabaki/go-board'
+import type { Vertex } from '@kaya/goboard'
+import type { SignMap } from '@kaya/goboard'
 import { parseGTPVertex } from './engine/katagoAdapter.ts'
 
 export interface ScoringResult {

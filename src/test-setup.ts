@@ -1,4 +1,4 @@
-import '@testing-library/preact'
+import '@testing-library/react'
 
 // jsdom does not provide ResizeObserver — mock it so Board tests render.
 if (typeof ResizeObserver === 'undefined') {

@@ -10,7 +10,7 @@
 //   - cpp/neuralnet/sgfmetadata.cpp (canonical Human-SL profile source of truth)
 // ============================================================================
 
-import type { Vertex } from '@sabaki/go-board'
+import type { Vertex } from '@kaya/goboard'
 
 // Re-export the existing Vertex type so engine consumers don't need to know
 // which dependency it came from. Single import surface for engine code.

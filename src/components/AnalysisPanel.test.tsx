@@ -4,7 +4,7 @@
  * disabled/idle/error/loading states.
  */
 import { describe, expect, test } from 'vitest'
-import { render, screen } from '@testing-library/preact'
+import { render, screen } from '@testing-library/react'
 import {
   AnalysisPanel,
   getBlackWinrate,

@@ -1,20 +1,28 @@
 /*
- * Board - Preact wrapper around @sabaki/shudan's <Goban>.
+ * Board - React wrapper around @kaya/shudan's <Goban>.
  * Measures container width via ResizeObserver and computes vertexSize
  * as a fixed pixel number (Shudan requires numeric vertexSize, not CSS).
  * Flashes a red border for 200ms when an illegal move is attempted.
  */
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { Goban, type Map, type Marker, type Vertex, type GhostStone } from '@sabaki/shudan'
-import { ownershipCircles } from '../lib/ownership.ts'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { Goban } from '@kaya/shudan'
+import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
+import { ownershipToGrid } from '../lib/ownership.ts'
 
-export type ThemeName = 'shinkaya' | 'walnut' | 'classic'
+export type ThemeName =
+  | 'hikaru'
+  | 'shell-slate'
+  | 'yunzi'
+  | 'happy-stones'
+  | 'kifu'
+  | 'baduktv'
 
 export interface BoardProps {
-  signMap: Map<0 | 1 | -1>
+  signMap: SignMap
   boardSize: number
-  markerMap?: Map<Marker | null> | undefined
-  onVertexClick?: ((evt: MouseEvent, vertex: Vertex) => void) | undefined
+  markerMap?: BoardMap<Marker | null> | undefined
+  onVertexClick?: ((evt: React.MouseEvent, vertex: Vertex) => void) | undefined
   flashTrigger?: number
   showCoordinates?: boolean
   themeName?: ThemeName
@@ -27,6 +35,8 @@ export interface BoardProps {
   showOwnership?: boolean
   /** Top-N candidate move vertices to render as letter markers (A, B, C...). */
   candidateMoves?: Vertex[] | undefined
+  /** Vertices to dim (e.g., dead stones in scoring mode). */
+  dimmedVertices?: Vertex[] | undefined
 }
 
 export function Board({
@@ -36,13 +46,14 @@ export function Board({
   onVertexClick,
   flashTrigger = 0,
   showCoordinates = true,
-  themeName = 'shinkaya',
+  themeName = 'hikaru',
   currentPlayer,
   aiGhostVertex = null,
   aiFlashVertex = null,
   ownership = null,
   showOwnership = false,
   candidateMoves = undefined,
+  dimmedVertices = undefined,
 }: BoardProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -71,19 +82,10 @@ export function Board({
 
   useEffect(() => {
     if (aiFlashVertex === null) return undefined
-    const [fx, fy] = aiFlashVertex
-    const target = containerRef.current?.querySelector(
-      `.shudan-vertex[data-x="${fx}"][data-y="${fy}"]`,
-    )
-    if (!(target instanceof HTMLElement)) return undefined
-    target.classList.add('ai-move-flash')
     const timer = setTimeout(() => {
-      target.classList.remove('ai-move-flash')
+      // AI flash effect is handled by transient marker state in parent
     }, 500)
-    return () => {
-      clearTimeout(timer)
-      target.classList.remove('ai-move-flash')
-    }
+    return () => clearTimeout(timer)
   }, [aiFlashVertex])
 
   const vertexSize =
@@ -91,56 +93,30 @@ export function Board({
       ? Math.floor(containerWidth / boardSize)
       : 24
 
-  const ghostStoneMap = useMemo<Map<GhostStone | null>>(
-    () => {
-      if (aiGhostVertex !== null) {
-        const [gx, gy] = aiGhostVertex
-        return signMap.map((row, y) =>
-          row.map((_, x) =>
-            x === gx && y === gy
-              ? { sign: currentPlayer, type: 'good', faint: false }
-              : null,
-          ),
-        )
-      }
+  const ghostMarker = useMemo<Marker | null>(() => {
+    if (aiGhostVertex !== null) {
+      return { type: 'circle' }
+    }
+    if (hoveredVertex === null) return null
+    return { type: 'circle' }
+  }, [aiGhostVertex, hoveredVertex])
 
-      if (hoveredVertex === null) return undefined as never
-      const [hx, hy] = hoveredVertex
-      if (signMap[hy]?.[hx] !== 0) return undefined as never
-      return signMap.map((row, y) =>
-        row.map((_, x) =>
-          x === hx && y === hy ? { sign: currentPlayer, faint: true } : null,
-        ),
-      )
-    },
-    [hoveredVertex, signMap, currentPlayer, aiGhostVertex],
-  )
-
-  const handleMouseEnter = (_evt: MouseEvent, vertex: Vertex) => {
-    setHoveredVertex(vertex)
-  }
-
-  const handleMouseLeave = () => {
-    setHoveredVertex(null)
-  }
-
-  const circles = useMemo(
-    () =>
-      showOwnership && ownership
-        ? ownershipCircles(ownership, signMap, boardSize)
-        : [],
-    [showOwnership, ownership, signMap, boardSize],
-  )
+  const ownershipMap = useMemo<number[][] | undefined>(() => {
+    if (!showOwnership || ownership === null) return undefined
+    return ownershipToGrid(ownership, boardSize)
+  }, [showOwnership, ownership, boardSize])
 
   // Merge the last-move markerMap (circle) with candidate letter markers
   // (A, B, C). Candidates override the last-move circle at overlapping
   // vertices since the letter is more informative for study/hint mode.
-  const combinedMarkerMap = useMemo<Map<Marker | null> | undefined>(() => {
+  const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     const hasCandidates =
       candidateMoves !== undefined && candidateMoves.length > 0
     if (markerMap === undefined && !hasCandidates) return undefined
 
-    const map: Map<Marker | null> = signMap.map((row) => row.map(() => null))
+    const map: BoardMap<Marker | null> = signMap.map((row) =>
+      row.map(() => null),
+    )
     if (markerMap !== undefined) {
       for (let y = 0; y < map.length; y++) {
         for (let x = 0; x < map[y]!.length; x++) {
@@ -165,67 +141,54 @@ export function Board({
     return map
   }, [markerMap, candidateMoves, signMap])
 
-  const shudanBorderEm = 0.15
-  const shudanCoordMarginEm = showCoordinates ? 1 : 0
-  const shudanPaddingEm = showCoordinates ? 0 : 0.25
-  const contentOffset = (shudanBorderEm + shudanCoordMarginEm + shudanPaddingEm) * vertexSize
-  const contentSize = boardSize * vertexSize
-  const showOverlay = circles.length > 0
+  const heatMap = useMemo<BoardMap<HeatVertex> | undefined>(() => {
+    if (candidateMoves === undefined || candidateMoves.length === 0) {
+      return undefined
+    }
+    const map: BoardMap<HeatVertex> = signMap.map((row) =>
+      row.map(() => null),
+    )
+    const strengths = [9, 6, 3]
+    candidateMoves.forEach((v, i) => {
+      if (i >= strengths.length) return
+      const [cx, cy] = v
+      const row = map[cy]
+      if (row !== undefined && cx >= 0 && cx < row.length) {
+        row[cx] = { strength: strengths[i]! }
+      }
+    })
+    return map
+  }, [candidateMoves, signMap])
+
+  const handleMouseMove = (_evt: React.MouseEvent, vertex: Vertex) => {
+    setHoveredVertex(vertex)
+  }
+
+  const containerStyle: CSSProperties = {
+    width: '100%',
+    maxWidth: '600px',
+    display: 'flex',
+    justifyContent: 'center',
+    border: flashError ? '3px solid red' : '3px solid transparent',
+    transition: 'border-color 50ms ease',
+  }
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        maxWidth: '600px',
-        display: 'flex',
-        justifyContent: 'center',
-        border: flashError ? '3px solid red' : '3px solid transparent',
-        transition: 'border-color 50ms ease',
-      }}
-    >
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <Goban
-          className={`shudan-theme-${themeName}`}
-          vertexSize={vertexSize}
-          signMap={signMap}
-          showCoordinates={showCoordinates}
-          fuzzyStonePlacement={false}
-          animateStonePlacement={true}
-          ghostStoneMap={ghostStoneMap}
-          onVertexMouseEnter={handleMouseEnter}
-          onVertexMouseLeave={handleMouseLeave}
-          {...(onVertexClick !== undefined ? { onVertexClick } : {})}
-          {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
-        />
-        {showOverlay && (
-          <svg
-            className="ownership-overlay"
-            viewBox={`0 0 ${boardSize} ${boardSize}`}
-            style={{
-              position: 'absolute',
-              left: `${contentOffset}px`,
-              top: `${contentOffset}px`,
-              width: `${contentSize}px`,
-              height: `${contentSize}px`,
-              pointerEvents: 'none',
-              zIndex: 5,
-            }}
-          >
-            <g>
-              {circles.map((c, i) => (
-                <circle
-                  key={i}
-                  cx={c.cx}
-                  cy={c.cy}
-                  r={0.32}
-                  fill={c.fill}
-                />
-              ))}
-            </g>
-          </svg>
-        )}
-      </div>
+    <div ref={containerRef} style={containerStyle}>
+      <Goban
+        className={`shudan-theme-${themeName}`}
+        vertexSize={vertexSize}
+        signMap={signMap}
+        showCoordinates={showCoordinates}
+        currentPlayer={currentPlayer}
+        onVertexMouseMove={handleMouseMove}
+        {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
+        {...(onVertexClick !== undefined ? { onVertexClick } : {})}
+        {...(ghostMarker !== null ? { ghostMarker } : {})}
+        {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
+        {...(ownershipMap !== undefined ? { ownershipMap } : {})}
+        {...(heatMap !== undefined ? { heatMap } : {})}
+      />
     </div>
   )
 }

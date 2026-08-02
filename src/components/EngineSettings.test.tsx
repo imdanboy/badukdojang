@@ -4,8 +4,8 @@
  * localStorage round-trip (stale state), and play-style interactions.
  */
 import { describe, expect, test, beforeEach, vi } from 'vitest'
-import { render, fireEvent, screen } from '@testing-library/preact'
-import { useState } from 'preact/hooks'
+import { render, fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import {
   EngineSettings,
   DEFAULT_SETTINGS,

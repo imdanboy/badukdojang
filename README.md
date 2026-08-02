@@ -1,6 +1,6 @@
 # badukdojang
 
-A Preact SPA for studying Go (baduk), with an optional KataGo AI engine
+A React 19 SPA for studying Go (baduk), with an optional KataGo AI engine
 integration served by a Bun bridge process during local development.
 
 ## Prerequisites
@@ -15,6 +15,24 @@ integration served by a Bun bridge process during local development.
 ```bash
 brew install katago
 ```
+
+## Setup
+
+Kaya core packages (`@kaya/goboard`, `@kaya/gametree`, `@kaya/sgf`,
+`@kaya/shudan`, `@kaya/themes`) are consumed as a Git submodule under
+`third_party/kaya` and linked via Bun. Run the setup script once after
+cloning:
+
+```bash
+bun run setup
+```
+
+This will check out the submodule, apply the required local patches in
+`patches/kaya/`, build the Kaya packages, link them into Bun's global
+registry, and install the rest of the project dependencies.
+
+> Do not run `bun install` alone on a fresh clone — the `@kaya/*` `link:`
+> entries in `package.json` require the setup step first.
 
 ## KataGo model files
 
@@ -100,6 +118,7 @@ runtime-configured public URL) instead of relying on Vite's dev server.
 
 | Script | What it does |
 | --- | --- |
+| `bun run setup` | One-time clone/build/link of the Kaya submodule and install dependencies |
 | `bun run dev` | Vite dev server with the `/api/gtp` proxy to the bridge |
 | `bun run start:engine` | Run the Bun GTP bridge against a local KataGo binary |
 | `bun run build` | Type-check and produce a static `dist/` (no proxy, no backend URL baked in) |

@@ -1,39 +1,37 @@
-import { parse, stringify } from '@sabaki/sgf'
-import GameTree from '@sabaki/immutable-gametree'
-import type { NodeObject } from '@sabaki/immutable-gametree'
+import { parse, stringify, sgfNodeToGameTreeNode } from '@kaya/sgf'
+import type { SGFNode, SGFNodeData } from '@kaya/sgf'
+import { GameTree } from '@kaya/gametree'
+import type { GameTreeNode } from '@kaya/gametree'
 
 export { GameTree }
 
 export function treeToSGF(tree: GameTree, size: number = 19): string {
-  const root: NodeObject = {
+  const root: GameTreeNode = {
     ...tree.root,
     data: {
       FF: ['4'],
       GM: ['1'],
       SZ: [String(size)],
       ...tree.root.data,
-    },
+    } as SGFNodeData,
   }
-  return stringify([root])
+  return stringify([root as SGFNode])
 }
 
 export function sgfToTree(sgf: string): GameTree {
-  let id = 0
-  const getId = () => id++
-
-  const parsedNodes = parse(sgf, { getId }) as NodeObject[]
+  const parsedNodes = parse(sgf) as SGFNode[]
   if (parsedNodes.length === 0) {
     throw new Error('No valid game tree found in SGF')
   }
 
-  const root = parsedNodes[0]!
+  const root = sgfNodeToGameTreeNode(parsedNodes[0]!)
   const hasContent =
     Object.keys(root.data).length > 0 || root.children.length > 0
   if (!hasContent) {
     throw new Error('SGF contains no game data')
   }
 
-  const tree = new GameTree({ getId, root })
+  const tree = new GameTree({ root: root as GameTreeNode })
 
   let currentNode = tree.root
   while (currentNode.children.length > 0) {

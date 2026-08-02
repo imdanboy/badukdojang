@@ -1,3 +1,4 @@
+import * as React from 'react'
 /*
  * AnalysisPanel - Real-time position analysis display.
  * Sits below the board. Shows:
@@ -26,7 +27,7 @@ export interface AnalysisPanelProps {
 
 // --- Style helpers (match EngineSettings / ControlBar design system) --------
 
-const panelStyle: preact.JSX.CSSProperties = {
+const panelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
@@ -39,12 +40,12 @@ const panelStyle: preact.JSX.CSSProperties = {
   maxWidth: '600px',
 }
 
-const titleStyle: preact.JSX.CSSProperties = {
+const titleStyle: React.CSSProperties = {
   fontWeight: 'bold',
   fontSize: '15px',
 }
 
-const barContainerStyle: preact.JSX.CSSProperties = {
+const barContainerStyle: React.CSSProperties = {
   position: 'relative',
   display: 'flex',
   width: '100%',
@@ -54,19 +55,19 @@ const barContainerStyle: preact.JSX.CSSProperties = {
   border: '1px solid #3b3b5c',
 }
 
-const blackFillStyle = (pct: number): preact.JSX.CSSProperties => ({
+const blackFillStyle = (pct: number): React.CSSProperties => ({
   width: `${pct}%`,
   background: '#1a1a1a',
   transition: 'width 0.3s ease',
 })
 
-const whiteFillStyle = (pct: number): preact.JSX.CSSProperties => ({
+const whiteFillStyle = (pct: number): React.CSSProperties => ({
   width: `${pct}%`,
   background: '#e8e8e8',
   transition: 'width 0.3s ease',
 })
 
-const centerMarkerStyle: preact.JSX.CSSProperties = {
+const centerMarkerStyle: React.CSSProperties = {
   position: 'absolute',
   top: 0,
   bottom: 0,
@@ -77,19 +78,19 @@ const centerMarkerStyle: preact.JSX.CSSProperties = {
   zIndex: 2,
 }
 
-const legendStyle: preact.JSX.CSSProperties = {
+const legendStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   fontSize: '12px',
   opacity: 0.8,
 }
 
-const mutedStyle: preact.JSX.CSSProperties = {
+const mutedStyle: React.CSSProperties = {
   opacity: 0.6,
   fontSize: '13px',
 }
 
-const scoreLeadStyle: preact.JSX.CSSProperties = {
+const scoreLeadStyle: React.CSSProperties = {
   fontSize: '13px',
   fontVariantNumeric: 'tabular-nums',
 }

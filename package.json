@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "setup": "bash scripts/setup.sh",
     "dev": "vite",
     "start": "bash scripts/dev.sh",
     "start:engine": "bun run src/server/gtp-bridge.ts",
@@ -15,17 +16,21 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
-    "@sabaki/go-board": "^1.4.1",
-    "@sabaki/immutable-gametree": "^1.9.4",
-    "@sabaki/sgf": "^3.4.7",
-    "@sabaki/shudan": "^1.7.1",
-    "preact": "^10.29.3"
+    "@kaya/goboard": "link:@kaya/goboard",
+    "@kaya/gametree": "link:@kaya/gametree",
+    "@kaya/sgf": "link:@kaya/sgf",
+    "@kaya/shudan": "link:@kaya/shudan",
+    "@kaya/themes": "link:@kaya/themes",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "@preact/preset-vite": "^2.10.5",
-    "@testing-library/preact": "^3.2.4",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^24.13.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.4.0",
     "@vitest/coverage-v8": "^4.1.9",
     "jsdom": "^29.1.1",
     "typescript": "~6.0.2",

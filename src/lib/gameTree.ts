@@ -1,13 +1,13 @@
-import GoBoard from '@sabaki/go-board'
-import type { SignMap, Vertex } from '@sabaki/go-board'
-import GameTree from '@sabaki/immutable-gametree'
-import type { NodeObject } from '@sabaki/immutable-gametree'
+import { GoBoard } from '@kaya/goboard'
+import type { SignMap, Vertex } from '@kaya/goboard'
+import { GameTree } from '@kaya/gametree'
+import type { GameTreeNode, Primitive } from '@kaya/gametree'
 
 export { GameTree }
 
 // Augment GameTree with a currentId property for navigation state
-declare module '@sabaki/immutable-gametree' {
-  interface GameTree {
+declare module '@kaya/gametree' {
+  interface GameTree<T = Record<string, Primitive[]>> {
     currentId?: string | number
   }
 }
@@ -78,7 +78,7 @@ function cloneTree(tree: GameTree): GameTree {
   const clone = new GameTree({
     getId: tree.getId,
     merger: tree.merger,
-    root: JSON.parse(JSON.stringify(tree.root)) as NodeObject,
+    root: JSON.parse(JSON.stringify(tree.root)) as GameTreeNode,
   })
   return clone
 }
@@ -116,10 +116,11 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
   for (const node of nodes) {
     if (node.id === tree.root.id) continue
 
+    const data = node.data as { B?: string[]; W?: string[] }
     const sign =
-      node.data.B != null && node.data.B.length > 0 && node.data.B[0] !== ''
+      data.B != null && data.B.length > 0 && data.B[0] !== ''
         ? 1
-        : node.data.W != null && node.data.W.length > 0 && node.data.W[0] !== ''
+        : data.W != null && data.W.length > 0 && data.W[0] !== ''
           ? -1
           : 0
 
@@ -128,7 +129,7 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
       continue
     }
 
-    const prop = sign === 1 ? node.data.B : node.data.W
+    const prop = sign === 1 ? data.B : data.W
     if (prop == null || prop.length === 0 || prop[0] === '') {
       // Pass — no board change
       continue
@@ -163,15 +164,16 @@ export function getMoveList(
   for (const node of nodes) {
     if (node.id === tree.root.id) continue
 
-    if (node.data.B != null) {
-      const prop = node.data.B
+    const data = node.data as { B?: string[]; W?: string[] }
+    if (data.B != null) {
+      const prop = data.B
       if (prop.length === 0 || prop[0] === '') {
         moves.push({ vertex: 'pass', sign: 1 })
       } else {
         moves.push({ vertex: sgfToVertex(prop[0] as string), sign: 1 })
       }
-    } else if (node.data.W != null) {
-      const prop = node.data.W
+    } else if (data.W != null) {
+      const prop = data.W
       if (prop.length === 0 || prop[0] === '') {
         moves.push({ vertex: 'pass', sign: -1 })
       } else {

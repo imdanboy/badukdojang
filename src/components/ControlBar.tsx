@@ -5,8 +5,8 @@
  * Game mode selector (self-play / AI), AI Move button.
  * Dark background (#1a1a2e) to make the wood board pop.
  */
-import { useRef } from 'preact/hooks'
-import type { RefObject } from 'preact'
+import { useRef } from 'react'
+import type { RefObject } from 'react'
 import type { GameState } from '../lib/gameState.ts'
 import { getMoveList } from '../lib/gameTree.ts'
 import type { ThemeName } from './Board.tsx'
@@ -23,7 +23,7 @@ export interface ControlBarProps {
   onUndo: () => void
   onRedo: () => void
   onSaveSGF: () => void
-  onFileChange: (e: Event) => void
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   showCoordinates: boolean
   onToggleCoordinates: () => void
   themeName: ThemeName
@@ -44,7 +44,7 @@ export interface ControlBarProps {
   onToggleAnalysis: () => void
 }
 
-const btnStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
+const btnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: '8px 16px',
   border: 'none',
   borderRadius: '4px',
@@ -55,7 +55,7 @@ const btnStyle = (disabled: boolean): preact.JSX.CSSProperties => ({
   color: '#e0e0e0',
 })
 
-const modeBtnStyle = (active: boolean, disabled: boolean): preact.JSX.CSSProperties => ({
+const modeBtnStyle = (active: boolean, disabled: boolean): React.CSSProperties => ({
   padding: '6px 14px',
   border: 'none',
   borderRadius: '4px',
@@ -148,16 +148,14 @@ export function ControlBar({
       <div style={{ width: '1px', height: '24px', background: '#3b3b5c' }} />
 
       {/* Board Size select */}
-      <label for="board-size-select" style={{ opacity: 0.7 }}>
+      <label htmlFor="board-size-select" style={{ opacity: 0.7 }}>
         Board Size
       </label>
       <select
         id="board-size-select"
         value={String(boardSize)}
-        onChange={(e) => {
-          const value = Number(
-            (e.currentTarget as HTMLSelectElement).value,
-          )
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+          const value = Number(e.currentTarget.value)
           onBoardSizeChange(value as BoardSize)
         }}
         style={{
@@ -274,7 +272,16 @@ export function ControlBar({
 
       {/* Theme selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        {(['shinkaya', 'walnut', 'classic'] as ThemeName[]).map((t) => (
+        {(
+          [
+            'hikaru',
+            'shell-slate',
+            'yunzi',
+            'happy-stones',
+            'kifu',
+            'baduktv',
+          ] as ThemeName[]
+        ).map((t) => (
           <button
             key={t}
             onClick={() => onThemeChange(t)}
@@ -285,7 +292,13 @@ export function ControlBar({
               background: themeName === t ? '#5a7fb5' : '#3b3b5c',
             }}
           >
-            {t === 'shinkaya' ? 'Wood' : t === 'walnut' ? 'Walnut' : 'Classic'}
+            {t === 'shell-slate'
+              ? 'Shell'
+              : t === 'happy-stones'
+                ? 'Happy'
+                : t === 'baduktv'
+                  ? 'TV'
+                  : t[0]!.toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
