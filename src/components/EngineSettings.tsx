@@ -20,9 +20,25 @@ export type HumanSLProfile =
   | 'rank_5k'
   | 'rank_1k'
   | 'rank_1d'
+  | 'rank_2d'
+  | 'rank_3d'
+  | 'rank_4d'
+  | 'rank_5d'
+  | 'rank_6d'
+  | 'rank_7d'
+  | 'rank_8d'
   | 'rank_9d'
 
 export type PlayStyle = 'human' | 'strong'
+
+/**
+ * Human move selection strategy.
+ * - `native`      — KataGo `genmove` with `humanSLProfile` + MCTS. Tunable
+ *                   via maxVisits / humanSLChosenMoveProp / temperature. Default.
+ * - `policySampler` — fetch 1-visit policy and sample client-side (the original
+ *                   weak-sampler path). Kept as opt-in fallback.
+ */
+export type HumanMoveMode = 'native' | 'policySampler'
 
 export interface EngineSettings {
   enabled: boolean
@@ -36,6 +52,9 @@ export interface EngineSettings {
   chosenMoveTemperature: number
   wideRootNoise: number
   playoutDoublingAdvantage: number
+  humanSLChosenMoveProp: number // 0..1, 1 = human policy, 0 = pure MCTS
+  humanMoveMode: HumanMoveMode
+  advancedOpen: boolean // UI: collapse state for advanced panel
 }
 
 export interface EngineSettingsProps {
@@ -55,11 +74,14 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   rules: 'korean',
   playStyle: 'human',
   humanSLProfile: 'rank_10k',
-  maxVisits: 10,
+  maxVisits: 300,
   manualTemperature: -1,
-  chosenMoveTemperature: 2.0,
-  wideRootNoise: 0.3,
-  playoutDoublingAdvantage: -1.0,
+  chosenMoveTemperature: 1.5,
+  wideRootNoise: 0.04,
+  playoutDoublingAdvantage: -0.25,
+  humanSLChosenMoveProp: 1.0,
+  humanMoveMode: 'native',
+  advancedOpen: false,
 }
 
 const MIN_THINKING_TIME = 1
@@ -67,7 +89,24 @@ const MAX_THINKING_TIME = 30
 const MIN_DIFFICULTY = 1
 const MAX_DIFFICULTY = 20
 
-const STRONG_MAX_VISITS = 500
+const STRONG_MAX_VISITS = 800
+
+// Compact list offered in the Advanced dropdown. KataGo supports many more
+// (rank_*, preaz_*, proyear_*); all kyu/dan buckets suffice for tuning.
+const HUMAN_SL_PROFILE_OPTIONS: readonly HumanSLProfile[] = [
+  'rank_20k', 'rank_15k', 'rank_10k', 'rank_5k', 'rank_1k',
+  'rank_1d', 'rank_2d', 'rank_3d', 'rank_4d', 'rank_5d', 'rank_6d', 'rank_7d', 'rank_8d', 'rank_9d',
+]
+
+// Advanced knob bounds
+const MIN_MAX_VISITS = 1
+const MAX_MAX_VISITS = 2000
+const MIN_DOUBLING = -3.0
+const MAX_DOUBLING = 1.0
+const MIN_NOISE = 0.0
+const MAX_NOISE = 1.0
+const MIN_HUMAN_PROP = 0.0
+const MAX_HUMAN_PROP = 1.0
 
 const RULES_LABELS: Record<Rules, string> = {
   chinese: '중국식',
@@ -99,35 +138,35 @@ export function difficultyToProfile(kyu: number): HumanSLProfile {
 }
 
 function difficultyToVisits(kyu: number): number {
-  if (kyu >= 18) return 1
-  if (kyu >= 13) return 5
-  if (kyu >= 8) return 10
-  if (kyu >= 3) return 25
-  return 50
+  if (kyu >= 18) return 20
+  if (kyu >= 13) return 80
+  if (kyu >= 8) return 300
+  if (kyu >= 3) return 600
+  return 1000
 }
 
 function difficultyToNoise(kyu: number): number {
-  if (kyu >= 18) return 0.8
-  if (kyu >= 13) return 0.5
-  if (kyu >= 8) return 0.3
-  if (kyu >= 3) return 0.1
+  if (kyu >= 18) return 0.3
+  if (kyu >= 13) return 0.15
+  if (kyu >= 8) return 0.04
+  if (kyu >= 3) return 0.0
   return 0.0
 }
 
 function difficultyToDoublingAdvantage(kyu: number): number {
-  if (kyu >= 16) return -3.0
-  if (kyu >= 11) return -2.0
-  if (kyu >= 6) return -1.0
-  if (kyu >= 3) return -0.5
+  if (kyu >= 16) return -1.5
+  if (kyu >= 11) return -0.75
+  if (kyu >= 6) return -0.25
+  if (kyu >= 3) return 0.0
   return 0.0
 }
 
 function difficultyToTemperature(kyu: number): number {
-  if (kyu >= 18) return 10.0
-  if (kyu >= 14) return 5.0
-  if (kyu >= 9) return 2.0
-  if (kyu >= 4) return 0.5
-  return 0.1
+  if (kyu >= 18) return 3.0
+  if (kyu >= 14) return 2.0
+  if (kyu >= 9) return 1.5
+  if (kyu >= 4) return 0.8
+  return 0.3
 }
 
 /** Format kyu value for display, e.g. 10 → "10급", 1 → "1급". */
@@ -172,10 +211,18 @@ export function normalizeSettings(
     MIN_DIFFICULTY,
     MAX_DIFFICULTY,
   )
+  const humanMoveMode: HumanMoveMode =
+    partial.humanMoveMode === 'policySampler' ? 'policySampler' : 'native'
   const humanSLProfile =
     partial.humanSLProfile ?? difficultyToProfile(difficulty)
   const maxVisits =
-    playStyle === 'strong' ? STRONG_MAX_VISITS : difficultyToVisits(difficulty)
+    playStyle === 'strong'
+      ? STRONG_MAX_VISITS
+      : clamp(
+          partial.maxVisits ?? difficultyToVisits(difficulty),
+          MIN_MAX_VISITS,
+          MAX_MAX_VISITS,
+        )
   const manualTemperature = clamp(
     partial.manualTemperature ?? DEFAULT_SETTINGS.manualTemperature,
     -1, 10,
@@ -186,10 +233,20 @@ export function normalizeSettings(
       : difficultyToTemperature(difficulty),
     0, 5,
   )
-  const wideRootNoise =
-    playStyle === 'strong' ? 0.0 : difficultyToNoise(difficulty)
-  const playoutDoublingAdvantage =
-    playStyle === 'strong' ? 0.0 : difficultyToDoublingAdvantage(difficulty)
+  const wideRootNoise = clamp(
+    playStyle === 'strong' ? 0.0
+      : partial.wideRootNoise ?? difficultyToNoise(difficulty),
+    MIN_NOISE, MAX_NOISE,
+  )
+  const playoutDoublingAdvantage = clamp(
+    playStyle === 'strong' ? 0.0
+      : partial.playoutDoublingAdvantage ?? difficultyToDoublingAdvantage(difficulty),
+    MIN_DOUBLING, MAX_DOUBLING,
+  )
+  const humanSLChosenMoveProp = clamp(
+    partial.humanSLChosenMoveProp ?? DEFAULT_SETTINGS.humanSLChosenMoveProp,
+    MIN_HUMAN_PROP, MAX_HUMAN_PROP,
+  )
 
   return {
     enabled: partial.enabled ?? DEFAULT_SETTINGS.enabled,
@@ -209,6 +266,9 @@ export function normalizeSettings(
     chosenMoveTemperature,
     wideRootNoise,
     playoutDoublingAdvantage,
+    humanSLChosenMoveProp,
+    humanMoveMode,
+    advancedOpen: partial.advancedOpen ?? DEFAULT_SETTINGS.advancedOpen,
   }
 }
 
@@ -553,6 +613,170 @@ export function EngineSettings({
               }}
             >
               Human-SL 모델이 설정되지 않았습니다.
+            </div>
+          )}
+
+          {/* Advanced panel toggle */}
+          <div style={sectionStyle}>
+            <button
+              type="button"
+              id="engine-advanced-toggle"
+              onClick={() => update({ advancedOpen: !settings.advancedOpen })}
+              style={{
+                ...btnStyle(settings.advancedOpen),
+                marginTop: '4px',
+                fontSize: '12px',
+              }}
+            >
+              {settings.advancedOpen ? '\u25BC' : '\u25C0'} 고급 설정
+            </button>
+          </div>
+
+          {settings.advancedOpen && (
+            <div
+              id="engine-advanced-body"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '10px 12px',
+                background: '#16162a',
+                borderRadius: '6px',
+                border: '1px solid #2a2a4e',
+              }}
+            >
+              {/* Max visits slider */}
+              <div style={sectionStyle}>
+                <label htmlFor="engine-max-visits-adv" style={labelStyle}>
+                  maxVisits
+                </label>
+                <input
+                  id="engine-max-visits-adv"
+                  type="range"
+                  min={MIN_MAX_VISITS}
+                  max={MAX_MAX_VISITS}
+                  step={1}
+                  value={settings.maxVisits}
+                  onChange={(e) => update({ maxVisits: Number(e.currentTarget.value) })}
+                  disabled={!settings.enabled}
+                  style={sliderStyle}
+                />
+                <span style={{ minWidth: '60px' }}>
+                  {settings.maxVisits}
+                </span>
+              </div>
+
+              {/* humanSLProfile dropdown */}
+              <div style={sectionStyle}>
+                <label htmlFor="engine-human-profile" style={labelStyle}>
+                  인간 급수
+                </label>
+                <select
+                  id="engine-human-profile"
+                  value={settings.humanSLProfile}
+                  onChange={(e) => update({ humanSLProfile: e.currentTarget.value as HumanSLProfile })}
+                  disabled={!isHumanStyle}
+                  style={{ ...selectStyle, opacity: isHumanStyle ? 1 : 0.4 }}
+                >
+                  {HUMAN_SL_PROFILE_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* humanSLChosenMoveProp slider (key knob) */}
+              <div style={sectionStyle}>
+                <label htmlFor="engine-human-prop" style={labelStyle}>
+                  인간 수 비율
+                </label>
+                <input
+                  id="engine-human-prop"
+                  type="range"
+                  min={MIN_HUMAN_PROP}
+                  max={MAX_HUMAN_PROP}
+                  step={0.05}
+                  value={settings.humanSLChosenMoveProp}
+                  onChange={(e) => update({ humanSLChosenMoveProp: Number(e.currentTarget.value) })}
+                  disabled={!isHumanStyle}
+                  style={{ ...sliderStyle, opacity: isHumanStyle ? 1 : 0.4 }}
+                />
+                <span style={{ minWidth: '40px' }}>
+                  {settings.humanSLChosenMoveProp.toFixed(2)}
+                </span>
+              </div>
+
+              {/* playoutDoublingAdvantage slider */}
+              <div style={sectionStyle}>
+                <label htmlFor="engine-doubling" style={labelStyle}>
+                  가산점 조정
+                </label>
+                <input
+                  id="engine-doubling"
+                  type="range"
+                  min={MIN_DOUBLING}
+                  max={MAX_DOUBLING}
+                  step={0.05}
+                  value={settings.playoutDoublingAdvantage}
+                  onChange={(e) => update({ playoutDoublingAdvantage: Number(e.currentTarget.value) })}
+                  disabled={!settings.enabled}
+                  style={sliderStyle}
+                />
+                <span style={{ minWidth: '50px' }}>
+                  {settings.playoutDoublingAdvantage.toFixed(2)}
+                </span>
+              </div>
+
+              {/* wideRootNoise slider */}
+              <div style={sectionStyle}>
+                <label htmlFor="engine-noise" style={labelStyle}>
+                  탐험 폭
+                </label>
+                <input
+                  id="engine-noise"
+                  type="range"
+                  min={MIN_NOISE}
+                  max={MAX_NOISE}
+                  step={0.01}
+                  value={settings.wideRootNoise}
+                  onChange={(e) => update({ wideRootNoise: Number(e.currentTarget.value) })}
+                  disabled={!settings.enabled}
+                  style={sliderStyle}
+                />
+                <span style={{ minWidth: '40px' }}>
+                  {settings.wideRootNoise.toFixed(2)}
+                </span>
+              </div>
+
+              {/* Human move mode toggle */}
+              <div style={sectionStyle}>
+                <span style={labelStyle}>착수 방식</span>
+                <button
+                  type="button"
+                  id="engine-move-mode-native"
+                  onClick={() => update({ humanMoveMode: 'native' })}
+                  disabled={!isHumanStyle}
+                  style={{ ...btnStyle(settings.humanMoveMode === 'native'), opacity: isHumanStyle ? 1 : 0.4 }}
+                >
+                  정확한 인간
+                </button>
+                <button
+                  type="button"
+                  id="engine-move-mode-sampler"
+                  onClick={() => update({ humanMoveMode: 'policySampler' })}
+                  disabled={!isHumanStyle}
+                  style={{ ...btnStyle(settings.humanMoveMode === 'policySampler'), opacity: isHumanStyle ? 1 : 0.4 }}
+                >
+                  가벼운 샘플러
+                </button>
+              </div>
+
+              <div style={{ opacity: 0.55, fontSize: '11px', lineHeight: 1.4 }}>
+                인간 수 비율 1.0=인간 policy 그대로, 0.0=순수 MCTS.
+                가산점 음수=약화, 양수=흑 유리 가정.
+                정확한 인간=KataGo genmove, 가벼운 샘플러=1-visit policy JS 샘플링(구 방식).
+              </div>
             </div>
           )}
         </div>

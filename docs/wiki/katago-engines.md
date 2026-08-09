@@ -3,7 +3,7 @@ title: KataGo 엔진 통합 — 사전 연구
 description: Phase-2 엔진 연동 전 조사 — KataGo 기능/모델/튜닝, Pachi·GNU Go 약 엔진 비교, badukdojang 통합 지점
 tags: [katago, engines, planning, research]
 created: 2026-07-18
-updated: 2026-08-09 (환경변수 → config/engine.json 기반 설정으로 전환)
+updated: 2026-08-09 (고급 설정 패널 추가, 인간 모방 native 전환)
 ---
 
 # KataGo 엔진 통합 — 사전 연구
@@ -201,6 +201,28 @@ humanSLChosenMoveProp = 1.0     # KataGo MCTS 수 대신 인간 수를 둘 확�
 
 - 여전히 너무 강하면: `maxVisits` 40-80까지 내리거나 이전 작은 net (`g170e-b10c128`/`b15c192`)로 교체
 - 너무 약하면: `maxVisits` 400-1000로 올리거나 `humanSLChosenMovePiklLambda`를 낮춤 (큼=인간적/약함, 작음=강함)
+
+### badukdojang UI 튜닝 — 고급 설정 패널 (런타임)
+
+엔진 설정 패널의 "고급 설정" 토글을 누르면 KataGo의 인간-모방 노브 5개를 엔진 재시작 없이 runtime으로 조절 가능. `kata-set-param` GTP 명령으로 즉시 적용.
+
+| 노브 | 범위 | 효과 |
+|------|------|------|
+| `maxVisits` | 1-2000 | 핵심 강도. 기본 10k=300, 5k=600, 1k=1000 |
+| `humanSLProfile` | rank_20k ~ rank_9d (14단계) | 인간 급수 모방 타겟. 단(rank_1d~9d) 선택 가능 |
+| `humanSLChosenMoveProp` | 0.0-1.0 | 1.0=인간 policy 그대로 샘플링(진짜 인간 흉내), 0.0=순수 MCTS(강함). **핵심 레버** |
+| `playoutDoublingAdvantage` | -3.0 ~ +1.0 | 음수=약화, 0=공평, 양수=흑 유리 가정 |
+| `wideRootNoise` | 0.0-1.0 | root exploration 폭 (클수록 무작위) |
+
+또한 "착수 방식" 토글:
+- **정확한 인간**(기본) — KataGo `genmove` + `humanSLProfile` + MCTS. KataGo가 인간 모방수를 직접 결정.
+- **가벼운 샘플러** — 1-visit policy만 가져와 JS에서 샘플링 (구 방식, 매우 약함).
+
+권장 튜닝 시퀀스 (10k 대국 기준):
+1. `humanSLChosenMoveProp=1.0`, `humanSLProfile=rank_10k` 유지. `maxVisits`를 20→100→300 순으로 올리며 승률 변화 관찰.
+2. 너무 강하면 `chosenMoveTemperature`를 1.5→3.0으로 올리거나 `playoutDoublingAdvantage`를 -0.5~-1.5로 음수화.
+3. 단 수준으로 가려면 `humanSLProfile` 드롭다운에서 `rank_1d`/`rank_5d` 선택.
+4. 너무 강해지면 `humanSLChosenMoveProp`을 0.3~0.5로 내려 MCTS 혼합.
 
 ### 분석 관련 노브 (형세 UI 작성 시)
 

@@ -204,6 +204,9 @@ export async function initializeEngine(settings: EngineSettings): Promise<void> 
   if (settings.playoutDoublingAdvantage !== undefined) {
     await setEngineParam('playoutDoublingAdvantage', settings.playoutDoublingAdvantage)
   }
+  if (settings.humanSLChosenMoveProp !== undefined) {
+    await setEngineParam('humanSLChosenMoveProp', settings.humanSLChosenMoveProp)
+  }
 }
 
 export async function requestMove(
@@ -212,7 +215,10 @@ export async function requestMove(
   settings?: EngineSettings,
 ): Promise<Vertex | 'pass' | 'resign'> {
   if (settings?.playStyle === 'human') {
-    return requestMovePolicyWeighted(gameTree, player, settings)
+    if (settings.humanMoveMode === 'policySampler') {
+      return requestMovePolicyWeighted(gameTree, player, settings)
+    }
+    return requestMoveGTP(gameTree, player, settings)
   }
   return requestMoveGTP(gameTree, player, settings)
 }
@@ -251,6 +257,9 @@ async function requestMoveGTP(
     }
     if (settings.playoutDoublingAdvantage !== undefined) {
       await setEngineParam('playoutDoublingAdvantage', settings.playoutDoublingAdvantage)
+    }
+    if (settings.humanSLChosenMoveProp !== undefined) {
+      await setEngineParam('humanSLChosenMoveProp', settings.humanSLChosenMoveProp)
     }
   }
 
@@ -308,6 +317,9 @@ export async function requestAnalysis(
   }
   if (settings.playoutDoublingAdvantage !== undefined) {
     body.playoutDoublingAdvantage = settings.playoutDoublingAdvantage
+  }
+  if (settings.humanSLChosenMoveProp !== undefined) {
+    body.humanSLChosenMoveProp = settings.humanSLChosenMoveProp
   }
 
   body.includeOwnership = true

@@ -133,7 +133,7 @@ test.describe('EngineSettings E2E', () => {
     await screenshot(page, 'rules-chinese')
   })
 
-  test('(f) 강한 AI toggle sets maxVisits=500 and disables difficulty', async ({
+  test('(f) 강한 AI toggle sets maxVisits=800 and disables difficulty', async ({
     page,
   }) => {
     await page.locator('#engine-toggle').click()
@@ -142,25 +142,25 @@ test.describe('EngineSettings E2E', () => {
     await page.locator('#engine-style-strong').click()
     await page.waitForTimeout(200)
 
-    await expect(page.locator('#engine-max-visits')).toContainText('500')
+    await expect(page.locator('#engine-max-visits')).toContainText('800')
     await expect(page.locator('#engine-difficulty')).toBeDisabled()
 
     await screenshot(page, 'strong-ai')
   })
 
-  test('(g) 인간 스타일 toggle sets maxVisits=40', async ({ page }) => {
+  test('(g) 인간 스타일 toggle sets maxVisits=300', async ({ page }) => {
     await page.locator('#engine-toggle').click()
     await page.waitForTimeout(200)
 
     // Switch to strong first, then back to human
     await page.locator('#engine-style-strong').click()
     await page.waitForTimeout(200)
-    await expect(page.locator('#engine-max-visits')).toContainText('500')
+    await expect(page.locator('#engine-max-visits')).toContainText('800')
 
     await page.locator('#engine-style-human').click()
     await page.waitForTimeout(200)
 
-    await expect(page.locator('#engine-max-visits')).toContainText('10')
+    await expect(page.locator('#engine-max-visits')).toContainText('300')
     await expect(page.locator('#engine-difficulty')).not.toBeDisabled()
 
     await screenshot(page, 'human-style')

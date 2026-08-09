@@ -85,14 +85,19 @@ describe('normalizeSettings', () => {
     expect(result.thinkingTime).toBe(1)
   })
 
-  test('strong play style forces maxVisits=500', () => {
+  test('strong play style forces maxVisits=800', () => {
     const result = normalizeSettings({ playStyle: 'strong', maxVisits: 40 })
-    expect(result.maxVisits).toBe(500)
+    expect(result.maxVisits).toBe(800)
   })
 
-  test('human play style derives maxVisits from difficulty', () => {
-    const result = normalizeSettings({ playStyle: 'human', maxVisits: 500, difficulty: 10 })
-    expect(result.maxVisits).toBe(10)
+  test('human play style derives maxVisits from difficulty (10k → 300)', () => {
+    const result = normalizeSettings({ playStyle: 'human', difficulty: 10 })
+    expect(result.maxVisits).toBe(300)
+  })
+
+  test('human play style respects explicit maxVisits override', () => {
+    const result = normalizeSettings({ playStyle: 'human', difficulty: 10, maxVisits: 50 })
+    expect(result.maxVisits).toBe(50)
   })
 
   test('derives humanSLProfile from difficulty when missing', () => {
@@ -106,15 +111,26 @@ describe('normalizeSettings', () => {
   })
 
   test('human play style maps difficulty to playoutDoublingAdvantage', () => {
-    expect(normalizeSettings({ playStyle: 'human', difficulty: 20 }).playoutDoublingAdvantage).toBe(-3.0)
-    expect(normalizeSettings({ playStyle: 'human', difficulty: 12 }).playoutDoublingAdvantage).toBe(-2.0)
-    expect(normalizeSettings({ playStyle: 'human', difficulty: 8 }).playoutDoublingAdvantage).toBe(-1.0)
-    expect(normalizeSettings({ playStyle: 'human', difficulty: 3 }).playoutDoublingAdvantage).toBe(-0.5)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 20 }).playoutDoublingAdvantage).toBe(-1.5)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 12 }).playoutDoublingAdvantage).toBe(-0.75)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 8 }).playoutDoublingAdvantage).toBe(-0.25)
+    expect(normalizeSettings({ playStyle: 'human', difficulty: 3 }).playoutDoublingAdvantage).toBe(0.0)
     expect(normalizeSettings({ playStyle: 'human', difficulty: 1 }).playoutDoublingAdvantage).toBe(0.0)
   })
 
   test('strong play style forces playoutDoublingAdvantage 0.0', () => {
     expect(normalizeSettings({ playStyle: 'strong', difficulty: 20 }).playoutDoublingAdvantage).toBe(0.0)
+  })
+
+  test('humanSLChosenMoveProp defaults to 1.0 and clamps to [0,1]', () => {
+    expect(normalizeSettings({}).humanSLChosenMoveProp).toBe(1.0)
+    expect(normalizeSettings({ humanSLChosenMoveProp: -1 }).humanSLChosenMoveProp).toBe(0)
+    expect(normalizeSettings({ humanSLChosenMoveProp: 2 }).humanSLChosenMoveProp).toBe(1)
+  })
+
+  test('humanMoveMode defaults to native', () => {
+    expect(normalizeSettings({}).humanMoveMode).toBe('native')
+    expect(normalizeSettings({ humanMoveMode: 'policySampler' }).humanMoveMode).toBe('policySampler')
   })
 })
 
@@ -135,11 +151,13 @@ describe('loadSettings / saveSettings', () => {
       difficulty: 5,
       rules: 'chinese',
       playStyle: 'strong',
-      maxVisits: 500,
+      maxVisits: 800,
       humanSLProfile: 'rank_5k',
       chosenMoveTemperature: 0,
       wideRootNoise: 0,
       playoutDoublingAdvantage: 0,
+      humanSLChosenMoveProp: 0.5,
+      humanMoveMode: 'policySampler',
     }
     saveSettings(custom)
     const loaded = loadSettings()
@@ -203,26 +221,26 @@ describe('EngineSettings component', () => {
     expect(newSettings.humanSLProfile).toBe('rank_5k')
   })
 
-  test('강한 AI button sets maxVisits=500 and playStyle=strong', () => {
+  test('강한 AI button sets maxVisits=800 and playStyle=strong', () => {
     const { onChange } = renderPanel({ enabled: true, playStyle: 'human' })
     const strongBtn = screen.getByText('강한 AI')
     fireEvent.click(strongBtn)
     const newSettings = onChange.mock.calls[0]![0] as EngineSettingsType
     expect(newSettings.playStyle).toBe('strong')
-    expect(newSettings.maxVisits).toBe(500)
+    expect(newSettings.maxVisits).toBe(800)
   })
 
   test('인간 스타일 button derives maxVisits from difficulty', () => {
     const { onChange } = renderPanel({
       enabled: true,
       playStyle: 'strong',
-      maxVisits: 500,
+      maxVisits: 800,
     })
     const humanBtn = screen.getByText('인간 스타일')
     fireEvent.click(humanBtn)
     const newSettings = onChange.mock.calls[0]![0] as EngineSettingsType
     expect(newSettings.playStyle).toBe('human')
-    expect(newSettings.maxVisits).toBe(10)
+    expect(newSettings.maxVisits).toBe(300)
     expect(newSettings.humanSLProfile).toBe('rank_10k')
   })
 

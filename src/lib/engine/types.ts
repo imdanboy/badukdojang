@@ -506,9 +506,11 @@ export interface EngineSettings {
   readonly rules: Rules
   readonly komi: number
   readonly humanSLProfile?: HumanSLProfile
+  readonly humanSLChosenMoveProp?: number
   readonly boardSize?: number
   readonly difficulty?: number
   readonly playStyle?: 'human' | 'strong'
+  readonly humanMoveMode?: 'native' | 'policySampler'
 }
 
 // ============================================================================

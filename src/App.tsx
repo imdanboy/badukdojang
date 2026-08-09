@@ -279,6 +279,8 @@ export function App() {
       chosenMoveTemperature: engineSettings.chosenMoveTemperature,
       wideRootNoise: engineSettings.wideRootNoise,
       playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
+      humanSLChosenMoveProp: engineSettings.humanSLChosenMoveProp,
+      humanMoveMode: engineSettings.humanMoveMode,
       boardSize,
       difficulty: engineSettings.difficulty,
       playStyle: engineSettings.playStyle,
@@ -299,6 +301,8 @@ export function App() {
       chosenMoveTemperature: engineSettings.chosenMoveTemperature,
       wideRootNoise: engineSettings.wideRootNoise,
       playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
+      humanSLChosenMoveProp: engineSettings.humanSLChosenMoveProp,
+      humanMoveMode: engineSettings.humanMoveMode,
       boardSize,
       difficulty: engineSettings.difficulty,
       playStyle: engineSettings.playStyle,
@@ -422,6 +426,19 @@ export function App() {
         }
       })
   }, [engineSettings.thinkingTime, engineSettings.enabled])
+
+  useEffect(() => {
+    if (!engineSettings.enabled || !engineInitializedRef.current) return
+    if (engineSettings.playStyle !== 'human') return
+    void katagoAdapter
+      .setEngineParam('humanSLChosenMoveProp', engineSettings.humanSLChosenMoveProp)
+      .catch((err) => {
+        console.error('Failed to set humanSLChosenMoveProp:', err)
+        if (err instanceof EngineError) {
+          setEngineError(err)
+        }
+      })
+  }, [engineSettings.humanSLChosenMoveProp, engineSettings.playStyle, engineSettings.enabled])
 
   useEffect(() => {
     if (
