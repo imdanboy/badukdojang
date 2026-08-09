@@ -1,0 +1,9 @@
+# References
+
+## 논문
+- Silver, D. et al. (2016). *Mastering the game of Go with deep neural networks and tree search.* Nature 529.
+- Silver, D. et al. (2017). *Mastering the game of Go without human knowledge.* (AlphaGo Zero).
+- Silver, D. et al. (2018). *A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play.* (AlphaZero).
+
+## 코드 레퍼런스
+- `suragnair/AlphaZero-General` — 게임 에이전트 일반화 재구현

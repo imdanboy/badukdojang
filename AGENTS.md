@@ -16,3 +16,4 @@
 
 ## 금지
 - MOC 를 무시하고 `docs/` 전체를 grep/read 하지 말 것.
+- `self-study/` 전체를 grep/read 하지 말 것. 진입은 `self-study/README.md` 로부터.

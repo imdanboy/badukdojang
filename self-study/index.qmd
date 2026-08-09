@@ -1,0 +1,22 @@
+---
+title: "AlphaGo Self-Study"
+---
+
+# AlphaGo Self-Study
+
+이 책은 badukdojang 프로젝트 하위의 독립 학습 노트다.
+자세한 배경과 규칙은 [README](README.md)를 볼 것.
+
+## 장 구성
+
+- @sec-mcts — MCTS + UCB1 (순수 NumPy)
+- @sec-policy — SL policy network (PyTorch)
+- @sec-value — Value network + RL
+- @sec-mini — Mini-AlphaGo 통합 POC
+
+## 실행
+
+```{bash}
+quarto render
+quarto preview
+```

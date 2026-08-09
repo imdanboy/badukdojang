@@ -22,6 +22,7 @@ LLM 이 어떤 노트를 읽을지 토큰을 거의 안 쓰고 결정할 수 있
 
 ## 바로가기
 - [ideas.md](ideas.md) — 아이디어, 할일, 메모
+- [`self-study/`](../self-study/README.md) — 독립 하위 프로젝트: 알파고 논문 literate-programming 학습 (Quarto + Python). wiki 규칙 밖, README 통해서만 진입.
 
 ## Wiki — 영속 레퍼런스
 - [baduk-mvp](wiki/baduk-mvp.md) — 9x9/13x13/19x19 바둑판 MVP: Sabaki 라이브러리 연동, SGF 입출력, Undo/Redo, 기술 스택, Wave 작업 흐름, Phase 2 로드맵

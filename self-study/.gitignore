@@ -1,0 +1,30 @@
+# Quarto render 산물
+_book/
+_site/
+*.html
+*.pdf
+*.epub
+!index.html
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 데이터/모델 (용량 큼, git에서 제외)
+data/
+models/
+*.pt
+*.pth
+*.ckpt
+*.npy
+!references/**/*.npy
+
+# 노트북 임시
+.ipynb_checkpoints/
+*.ipynb

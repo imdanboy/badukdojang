@@ -1,3 +1,4 @@
 [submodule "third_party/kaya"]
 	path = third_party/kaya
 	url = https://github.com/kaya-go/kaya.git
+	ignore = dirty

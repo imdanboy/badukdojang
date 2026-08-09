@@ -1,0 +1,26 @@
+# Value Network + RL {#sec-value}
+
+## 이론
+
+- **Value network**: 현재 상태에서 현재 플레이어의 승률을 추정.
+  $$ v(s) \approx \Pr(\text{win} \mid s) $$
+  데이터: 셀프플레이 한 판에서 단일 샘플(논문대로 overfitting 회피).
+
+- **RL policy network**: SL policy를 초기값으로 셀프플레이 + policy gradient로 강화.
+  $$ \Delta \theta \propto \nabla_\theta \log p_\theta(a \mid s) \cdot z $$
+
+## 목표
+
+- [ ] 셀프플레이 롤아웃 파이프라인
+- [ ] value net 학습 (binary cross-entropy)
+- [ ] RL policy 강화 곡선
+
+## 코드 청크
+
+```{python}
+# TODO: self-play + value net training
+```
+
+## 독해 노트
+
+논문 4절(Reinforcement Learning of Policy Networks) + 5절(Evaluation).

@@ -1,0 +1,32 @@
+# MCTS + UCB1 {#sec-mcts}
+
+## 이론
+
+MCTS는 4단계 — Selection / Expansion / Simulation / Backpropagation.
+선택은 UCB1:
+
+$$
+a_t = \arg\max_a \left( Q(a) + c \sqrt{\frac{\ln N}{n_a}} \right)
+$$
+
+- $Q(a)$: 행동 $a$ 의 평균 보상
+- $N$: 부모 노드 방문수
+- $n_a$: 자식 $a$ 방문수
+- $c$: 탐험 상수 (보통 $\sqrt 2$)
+
+## 목표
+
+- [ ] `games/` 환경 인터페이스 정의 (`step`, `legal_moves`, `is_done`, `reward`)
+- [ ] 순수 NumPy로 MCTS 구현
+- [ ] 무작위 vs MCTS 승률 벤치마크 → 이 qmd에 render
+
+## 코드 청크
+
+```{python}
+# TODO: import numpy as np
+# TODO: MCTS 구현 + 벤치마크
+```
+
+## 독해 노트
+
+논문 2절(Search)을 대응시켜 적을 것.

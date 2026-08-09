@@ -1,0 +1,32 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "AlphaGo Self-Study"
+  author: "jinbei"
+  description: >-
+    알파고 논문/알고리즘을 literate programming 방식으로 학습하는 노트 + 실행 코드.
+    badukdojang 앱(인공지능 바둑 대국/분석)과 도메인을 공유하지만 툴체인은 독립.
+  chapters:
+    - index.qmd
+    - 01-mcts/index.qmd
+    - 02-policy-net/index.qmd
+    - 03-value-net/index.qmd
+    - 04-mini-alphago/index.qmd
+    - references/index.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: false
+  pdf:
+    documentclass: scrbook
+    papersize: a4
+    toc: true
+  epub:
+    toc: true
+
+execute:
+  freeze: auto

@@ -1,0 +1,27 @@
+# Mini-AlphaGo (통합 POC) {#sec-mini}
+
+## 목표
+
+1~3장 산출물을 합쳐 한 에이전트를 만든다:
+MCTS 내 policy/value을 evaluation에 사용 (논문의 asynchronous MCTS).
+
+## 벤치마크 계획
+
+| 단계 | 백엔드 |
+|------|--------|
+| 무작위 vs MCTS-only | 1장 산출물 |
+| MCTS-only vs +policy | 2장 적용 |
+| +policy vs +policy+value | 3장 적용 |
+| 셀프플레이 후 강화 | RL 루프 |
+
+각 승률/트리 크기를 qmd에 render 하고, "이해했는지"를 데이터로 검증.
+
+## 코드 청크
+
+```{python}
+# TODO: 통합 에이전트
+```
+
+## 독해 노트
+
+논문 6절(Mastering the Game of Go).

@@ -1,0 +1,29 @@
+# SL Policy Network {#sec-policy}
+
+## 이론
+
+인간 기보로부터 지도학습. 입력: 바둑판 상태, 출력: 다음 수 확률 분포.
+구조 (논문): 13-layer CNN. 본 POC에서는 작은 판에 맞춰 3~5-layer CNN으로 축소.
+
+손실: cross-entropy.
+
+$$
+L = -\sum_a \pi_{\text{expert}}(a) \log p_\theta(a \mid s)
+$$
+
+## 목표
+
+- [ ] `games/` 환경에서 자가 플레이 데이터 또는 외부 SGF 파싱
+- [ ] 작은 CNN 정의 (PyTorch)
+- [ ] 학습 곡선/혼동행렬 → qmd에 render
+
+## 코드 청크
+
+```{python}
+# TODO: import torch
+# TODO: CNN 정의 + 학습 루프
+```
+
+## 독해 노트
+
+논문 3절(Supervised Learning of Policy Networks).
