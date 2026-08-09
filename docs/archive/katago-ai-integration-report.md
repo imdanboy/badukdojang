@@ -47,7 +47,7 @@ updated: 2026-07-18
 | 분석 엔진 | `katago analysis` JSON (async streaming) | ownership, scoreLead, winrate, bestMoves 한 번에 수집 |
 | AI 상대 | Human-SL `b18c384nbt-humanv0` + `humanSLProfile=rank_10k` + `maxVisits=40` | 실제 인간 10급 기보 모방 (visit-cap만 쓴 pro net보다 인간적) |
 | 규칙 | `korean` (area scoring, komi 6.5) | 사용자 경험(타이잼/KaTrain)에 맞춤 |
-| SPA 유지 | Pure web (Tauri 제외) | Tauri는 Phase-2 로드맵(`baduk-mvp.md:149`)에 유지 |
+| SPA 유지 | Pure web (Tauri 제외) | Tauri는 Phase-2 로드맵(baduk-mvp.md:149)에 유지 |
 
 ## 검증 결과
 
@@ -122,14 +122,14 @@ updated: 2026-07-18
 
 ## 관련 노트
 
-- [katago-engines](katago-engines.md) — 사전 연구 노트 (기능/모델/튜닝/약 엔진 비교)
+- [katago-engines](../wiki/katago-engines.md) — 사전 연구 노트 (기능/모델/튜닝/약 엔진 비교)
 - [baduk-mvp](baduk-mvp.md) — Phase-2 로드맵 (Tauri, 계가, AI 연동)
 - [token-usage](token-usage.md) — MVP 개발 토큰 추적
-- [ideas.md](../ideas.md) — 원 요청 Inbox (L13-34)
+- [ideas.md](../ideas.md) — 원 요청 Inbox
 
 ## 후속 작업 (미래 Phase)
 
-- Tauri 데스크톱 앱 포장 (`baduk-mvp.md:149`)
+- Tauri 데스크톱 앱 포장 (archive/baduk-mvp.md:149)
 - 다중 엔진 선택기 (Pachi, GNU Go)
 - Human-SL 외 추가 모델 자동 다운로드
 - 온라인 대국 (멀티플레이어)

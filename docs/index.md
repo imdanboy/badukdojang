@@ -1,9 +1,9 @@
 ---
 title: badukdojang 위키
-description: 프로젝트 위키 진입점 (MOC). wiki/ 영속 노트와 ideas.md 로 라우팅.
+description: 프로젝트 위키 진입점 (MOC). 바로가기(현행)와 archive(과거/완료)로 라우팅.
 tags: [moc, index]
 created: 2026-07-16
-updated: 2026-08-03 (setup-and-usage 노트 추가, katago-engines 설치법 갱신)
+updated: 2026-08-09 (노트 분류 기준을 용도/빈도로 변경, archive 섹션 신설)
 ---
 
 # badukdojang 위키
@@ -19,15 +19,23 @@ LLM 이 어떤 노트를 읽을지 토큰을 거의 안 쓰고 결정할 수 있
    - 파일명은 kebab-case.
 2. 새 아이디어/메모는 `ideas.md` 에 자유롭게 추가하고, 주기적으로 `wiki/` 노트로 승격.
 3. 새 노트 추가/이름 변경 시에만 `index.md` 갱신.
+4. **섹션 기준 = 용도/빈도** (위치 아님).
+   - **바로가기** — 즉시·반복 조회 (메모함, 외부 폴더 진입, 설치·실행·튜닝 사용법).
+   - **Wiki** — 영속 지식·의사결정·레퍼런스.
+   - **Archive** — 완료된 보고·과거 아키텍처·히스토리. 맥락 이해용이지 현행 가이드 아님.
 
 ## 바로가기
 - [ideas.md](ideas.md) — 아이디어, 할일, 메모
 - [`self-study/`](../self-study/README.md) — 독립 하위 프로젝트: 알파고 논문 literate-programming 학습 (Quarto + Python). wiki 규칙 밖, README 통해서만 진입.
+- [setup-and-usage](wiki/setup-and-usage.md) — 클론부터 KataGo bridge 실행, dev 서버, 빌드, 테스트까지 전체 사용법
+- [katago-engines](wiki/katago-engines.md) — KataGo 기능/모델/튜닝 + 약 엔진(Pachi/GNU Go) 비교, 설정 패널·디버깅 체크리스트
 
-## Wiki — 영속 레퍼런스
-- [baduk-mvp](wiki/baduk-mvp.md) — 9x9/13x13/19x19 바둑판 MVP: Sabaki 라이브러리 연동, SGF 입출력, Undo/Redo, 기술 스택, Wave 작업 흐름, Phase 2 로드맵
-- [setup-and-usage](wiki/setup-and-usage.md) — badukdojang 클론부터 KataGo bridge 실행, 개발 서버, 테스트까지 전체 사용법
-- [token-usage](wiki/token-usage.md) — baduk-mvp 개발 LLM 토큰 소모량 추적: 계획 3.08M vs 실행 0.56M, 캐시 히트율 56%→96%, 작업별 추정 분배
-- [katago-engines](wiki/katago-engines.md) — 엔진 사전 연구 + 설치·사용법: KataGo 기능/모델/튜닝 + brew 설치, 모델 다운로드, 환경변수, 두 터미널 실행, 디버깅 체크리스트
-- [katago-ai-integration-report](wiki/katago-ai-integration-report.md) — AI 대국 실행 완료 보고: AI 모드, 형세분석, 계가, 설정패널. 토큰 7.38M, 15 todo 완료, 48 E2E pass
-- [badukdojang-migration](wiki/badukdojang-migration.md) — 설계안 기반 MVP → 신규 아키텍처 이전 가이드. Preact→React 19, @sabaki→@kaya, Git Submodule + patch로 Kaya 의존성 관리
+## Wiki
+_(현재 영속 레퍼런스 없음. 새 레퍼런스는 `docs/wiki/`로 승격)_
+
+## Archive — 과거/완료 기록
+- [baduk-mvp](archive/baduk-mvp.md) — 2026-07-05 MVP 완성 노트. @sabaki/Preact 시절. 실행법은 setup-and-usage로 이전됨
+- [badukdojang-migration](archive/badukdojang-migration.md) — MVP → React 19 + @kaya/* 이전 완료 기록 (1-4·6단계 완료, 5단계 다중 엔진은 미완→ ideas로 이관)
+- [katago-ai-integration-report](archive/katago-ai-integration-report.md) — Phase-2 AI 통합 완료 보고 (15 todo, 48 E2E pass, 7.38M 토큰)
+- [token-usage](archive/token-usage.md) — baduk-mvp 개발 토큰 추적 (계획 3.08M vs 실행 0.56M, 캐시 56%→96%)
+- [board-theming-plan](archive/board-theming-plan.md) — @sabaki/shudan용 3테마 계획. Kaya themes 통합으로 대체됨

@@ -182,7 +182,7 @@ bun run build
 ## 관련 노트
 
 - [katago-engines](katago-engines.md) — KataGo 기능/모델/튜닝 상세 설명
-- [katago-ai-integration-report](katago-ai-integration-report.md) — AI 기능 완료 보고
-- [badukdojang-migration](badukdojang-migration.md) — React 19 + @kaya 마이그레이션 기록
+- [katago-ai-integration-report](../archive/katago-ai-integration-report.md) — AI 기능 완료 보고
+- [badukdojang-migration](../archive/badukdojang-migration.md) — React 19 + @kaya 마이그레이션 기록
 - [index.md](../index.md) — 위키 MOC
 - [ideas.md](../ideas.md)

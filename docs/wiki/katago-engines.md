@@ -354,4 +354,4 @@ humanSLChosenMoveProp = 1.0     # KataGo MCTS 수 대신 인간 수를 둘 확�
 
 - [ideas.md](../ideas.md)
 - [index.md](../index.md)
-- [baduk-mvp](baduk-mvp.md) — Phase-2 roadmap에 KataGo 연동·Tauri·계가 명시
+- [baduk-mvp](../archive/baduk-mvp.md) — Phase-2 roadmap에 KataGo 연동·Tauri·계가 명시
