@@ -8,6 +8,9 @@ updated: 2026-08-09 (archive 정리 후 재작성 — 구 Inbox/할일/OOM/OMO �
 
 # 바둑 사이드 프로젝트 — 아이디어 및 할일
 
+## INBOX
+https://github.com/suragnair/alpha-zero-general
+
 ## 바둑 경험
 - 약 1년 독학. 타이잼 / KataGo / KaTrain / playgo.gg / 스팀 바둑게임 경험
 - AI 10급과 엇비슷 (진지하면 승, 대충하면 패) → 실력 약 15~10급
