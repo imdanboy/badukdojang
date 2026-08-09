@@ -32,3 +32,7 @@ e2e-report/
 # OMO (ephemeral session/state artifacts)
 .omo/
 .playwright-mcp/
+
+# Local engine config (machine-specific absolute model paths)
+# Template: config/engine.example.json
+config/engine.json

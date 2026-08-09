@@ -1,0 +1,8 @@
+{
+  "katagoBinary": "katago",
+  "katagoConfigPath": "/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg",
+  "modelPath": "~/katago-models/kata1-b18c384nbt.bin.gz",
+  "humanModelPath": "~/katago-models/b18c384nbt-humanv0.bin.gz",
+  "analysisConfigPath": null,
+  "port": 8787
+}

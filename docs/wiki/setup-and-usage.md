@@ -3,7 +3,7 @@ title: badukdojang 설치 및 사용법
 description: badukdojang 클론부터 KataGo bridge 실행, 개발 서버, 테스트까지 전체 사용법.
 tags: [setup, usage, katago, kaya, bun, dev]
 created: 2026-08-03
-updated: 2026-08-03
+updated: 2026-08-09 (환경변수 → config/engine.json 기반 설정으로 전환)
 ---
 
 # badukdojang 설치 및 사용법
@@ -82,19 +82,40 @@ curl -L -o ~/katago-models/b18c384nbt-humanv0.bin.gz \
 
 ---
 
-## 4단계: 환경변수 설정
+## 4단계: 엔진 설정 파일 작성 (한 번만)
 
-터미널 세션마다 export하거나 `~/.zshrc`에 추가한다.
+KataGo 모델 경로·바이너리·포트 등 머신 종속 값을 environment variable 대신 **`config/engine.json`** 파일에서 읽는다.
 
 ```bash
-export KATAGO_MODEL_PATH="$HOME/katago-models/kata1-b18c384nbt.bin.gz"
-export HUMAN_MODEL_PATH="$HOME/katago-models/b18c384nbt-humanv0.bin.gz"
-
-# 기본값과 다를 경우:
-# export KATAGO_BINARY=katago
-# export KATAGO_CONFIG_PATH=/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg
-# export PORT=8787
+cp config/engine.example.json config/engine.json
 ```
+
+`config/engine.json` 예시 (`~` 는 자동으로 `$HOME` 으로 확장됨):
+
+```json
+{
+  "katagoBinary": "katago",
+  "katagoConfigPath": "/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg",
+  "modelPath": "~/katago-models/kata1-b18c384nbt.bin.gz",
+  "humanModelPath": "~/katago-models/b18c384nbt-humanv0.bin.gz",
+  "analysisConfigPath": null,
+  "port": 8787
+}
+```
+
+필드별 의미:
+| 필드 | 기본값 | 비고 |
+|------|--------|------|
+| `katagoBinary` | `katago` | PATH 에 있는 바이너리명 또는 절대경로 |
+| `katagoConfigPath` | Homebrew 1.16.4 경로 | `katago gtp`용 설정. `brew list --verbose katago` 로 확인 |
+| `modelPath` | — (필수) | KataGo 메인 네트워크. `~` 확장됨 |
+| `humanModelPath` | — (옵션) | Human-SL 네트워크. 설정 안 하면 `humanModelAvailable=false` |
+| `analysisConfigPath` | `null` | `null`이면 `config/analysis.cfg` 자동 사용 |
+| `port` | `8787` | KataGo bridge 포트 |
+
+> `config/engine.json` 은 gitignored (머신마다 다른 절대경로 포함). 템플릿은 `config/engine.example.json`.
+>
+> **우선순위**: 환경변수 > `config/engine.json` > 기본값. 환경변수(`KATAGO_MODEL_PATH`, `HUMAN_MODEL_PATH`, `KATAGO_BINARY`, `KATAGO_CONFIG_PATH`, `KATAGO_ANALYSIS_CONFIG_PATH`, `PORT`)는 여전히 override 로 사용 가능 (테스트 등).
 
 ---
 
@@ -173,8 +194,8 @@ bun run build
 | `bun install`에서 `@kaya/* not linked` | `bun run setup` 미실행 | `bun run setup` 실행 |
 | `patch already applied or incompatible` | setup 중복 실행 | 정상 메시지, 무시 |
 | `"엔진이 꺼져 있습니다"` 토스트 | bridge 서버 미실행 | `bun run start:engine` 또는 `bun run start` |
-| `"엔진 연결 실패"` / 503 | bridge는 켜졌으나 KataGo spawn 실패 | `KATAGO_MODEL_PATH`, `HUMAN_MODEL_PATH` 확인 |
-| `humanModelAvailable: false` | Human-SL 모델 경로 오류 | `HUMAN_MODEL_PATH` 확인 |
+| `"엔진 연결 실패"` / 503 | bridge는 켜졌으나 KataGo spawn 실패 | `config/engine.json`의 `modelPath` 확인 (파일 존재 `ls ~/katago-models/`) |
+| `humanModelAvailable: false` | Human-SL 모델 경로 오류 | `config/engine.json`의 `humanModelPath` 확인 |
 | AI 응답 없음 | `maxTime` 초과 또는 `maxVisits` 너무 큼 | 설정 패널에서 생각 시간 5초, 난이도 10급 조정 |
 
 ---

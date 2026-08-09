@@ -5,6 +5,8 @@
  * for the frontend to communicate with KataGo.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -105,34 +107,101 @@ interface AnalysisEngineResponse {
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
+// Resolution order for every knob: **env var > config/engine.json > default**.
+// This keeps tests able to override (e.g. `PORT=0`) while letting users put
+// machine-specific paths in a committed-ignored config file.
+
+interface EngineConfig {
+  readonly katagoBinary?: string;
+  readonly katagoConfigPath?: string;
+  readonly modelPath?: string;
+  readonly humanModelPath?: string;
+  readonly analysisConfigPath?: string | null;
+  readonly port?: number;
+}
+
+let cachedFileConfig: Partial<EngineConfig> | null = null;
+
+function loadFileConfig(): Partial<EngineConfig> {
+  if (cachedFileConfig !== null) return cachedFileConfig;
+  if (import.meta.dir === undefined) {
+    cachedFileConfig = {};
+    return cachedFileConfig;
+  }
+  const path = `${import.meta.dir}/../../config/engine.json`;
+  try {
+    if (!existsSync(path)) {
+      cachedFileConfig = {};
+      return cachedFileConfig;
+    }
+    const text = readFileSync(path, 'utf8');
+    cachedFileConfig = JSON.parse(text) as Partial<EngineConfig>;
+    return cachedFileConfig;
+  } catch (error) {
+    console.warn(
+      `Failed to load config/engine.json: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    cachedFileConfig = {};
+    return cachedFileConfig;
+  }
+}
+
+/** Reset the config cache. Exposed for tests that swap config/env. */
+export function resetEngineConfigCache(): void {
+  cachedFileConfig = null;
+}
+
+function expandHome(p: string): string {
+  if (p.startsWith('~/') || p === '~') {
+    return `${process.env.HOME ?? ''}${p.slice(1)}`;
+  }
+  return p;
+}
 
 function getEnv(name: string): string | undefined {
   return Bun.env[name];
 }
 
-function requireEnv(name: string): string {
-  const value = getEnv(name);
-  if (value === undefined || value === '') {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
 function getKatagoBinary(): string {
-  return getEnv('KATAGO_BINARY') ?? 'katago';
+  return getEnv('KATAGO_BINARY') ?? loadFileConfig().katagoBinary ?? 'katago';
 }
 
 function getKatagoConfigPath(): string {
   return (
     getEnv('KATAGO_CONFIG_PATH') ??
+    loadFileConfig().katagoConfigPath ??
     '/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg'
   );
 }
 
+function getModelPath(): string {
+  const raw = getEnv('KATAGO_MODEL_PATH') ?? loadFileConfig().modelPath;
+  if (raw === undefined || raw === '') {
+    throw new Error(
+      'Missing model path. Set `modelPath` in config/engine.json (see config/engine.example.json) or export KATAGO_MODEL_PATH.'
+    );
+  }
+  return expandHome(raw);
+}
+
+function getHumanModelPath(): string | undefined {
+  const raw = getEnv('HUMAN_MODEL_PATH') ?? loadFileConfig().humanModelPath;
+  return raw && raw !== '' ? expandHome(raw) : undefined;
+}
+
+function getAnalysisConfigPath(): string | undefined {
+  const raw =
+    getEnv('KATAGO_ANALYSIS_CONFIG_PATH') ?? loadFileConfig().analysisConfigPath;
+  return raw && raw !== '' ? raw : undefined;
+}
+
 function getPort(): number {
-  const port = Number(getEnv('PORT') ?? '8787');
+  const raw = getEnv('PORT') ?? loadFileConfig().port ?? 8787;
+  const port = Number(raw);
   if (Number.isNaN(port) || port < 0 || port > 65535) {
-    throw new Error(`Invalid PORT: ${getEnv('PORT')}`);
+    throw new Error(`Invalid PORT: ${raw}`);
   }
   return port;
 }
@@ -202,12 +271,12 @@ export class KataGoBridge {
 
   async start(): Promise<void> {
     const binary = getKatagoBinary();
-    const modelPath = requireEnv('KATAGO_MODEL_PATH');
+    const modelPath = getModelPath();
     const configPath = getKatagoConfigPath();
-    const humanModelPath = getEnv('HUMAN_MODEL_PATH');
+    const humanModelPath = getHumanModelPath();
 
     const args = ['gtp', '-model', modelPath, '-config', configPath];
-    if (humanModelPath !== undefined && humanModelPath !== '') {
+    if (humanModelPath !== undefined) {
       args.push('-human-model', humanModelPath);
     }
 
@@ -233,11 +302,11 @@ export class KataGoBridge {
 
     // Start analysis engine
     const analysisConfigPath =
-      getEnv('KATAGO_ANALYSIS_CONFIG_PATH') ??
+      getAnalysisConfigPath() ??
       (await resolveDefaultAnalysisConfig()) ??
       '/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/analysis_example.cfg';
     const analysisArgs = ['analysis', '-model', modelPath, '-config', analysisConfigPath];
-    if (humanModelPath !== undefined && humanModelPath !== '') {
+    if (humanModelPath !== undefined) {
       analysisArgs.push('-human-model', humanModelPath);
     }
 
@@ -635,11 +704,11 @@ export class KataGoBridge {
     }
     try {
       await this.sendCommand('name', 5000);
-      const humanModelPath = getEnv('HUMAN_MODEL_PATH');
+      const humanModelPath = getHumanModelPath();
       return {
         status: 'ok',
         version: this.version,
-        humanModelAvailable: humanModelPath !== undefined && humanModelPath !== '',
+        humanModelAvailable: humanModelPath !== undefined,
       };
     } catch {
       return { status: 'error' };

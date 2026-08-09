@@ -3,7 +3,7 @@ title: KataGo 엔진 통합 — 사전 연구
 description: Phase-2 엔진 연동 전 조사 — KataGo 기능/모델/튜닝, Pachi·GNU Go 약 엔진 비교, badukdojang 통합 지점
 tags: [katago, engines, planning, research]
 created: 2026-07-18
-updated: 2026-08-03 (React 19/Kaya 마이그레이션 후 setup 절차 반영)
+updated: 2026-08-09 (환경변수 → config/engine.json 기반 설정으로 전환)
 ---
 
 # KataGo 엔진 통합 — 사전 연구
@@ -68,16 +68,16 @@ curl -L -o ~/katago-models/b18c384nbt-humanv0.bin.gz \
   https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz
 ```
 
-### 3단계: 환경변수 설정 (터미널마다, 또는 `~/.zshrc`에 추가)
+### 3단계: 엔진 설정 파일 작성 (`config/engine.json`)
+
+머신 종속값(모델 경로·바이너리·포트)은 환경변수 대신 `config/engine.json`에서 읽는다. 자세한 스키마는 [setup-and-usage](setup-and-usage.md#4단계-엔진-설정-파일-작성-한-번만) 참조.
 
 ```bash
-export KATAGO_MODEL_PATH="$HOME/katago-models/kata1-b18c384nbt.bin.gz"
-export HUMAN_MODEL_PATH="$HOME/katago-models/b18c384nbt-humanv0.bin.gz"
-# 선택 — 기본값과 다를 경우:
-# export KATAGO_BINARY=katago
-# export KATAGO_CONFIG_PATH=/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg
-# export PORT=8787
+cp config/engine.example.json config/engine.json
+# modelPath / humanModelPath 를 다운로드한 파일 경로로 수정
 ```
+
+> 우선순위: 환경변수 > `config/engine.json` > 기본값. 기존 env var(`KATAGO_MODEL_PATH` 등)도 여전히 동작.
 
 ### 4단계: 실행
 
@@ -114,9 +114,9 @@ await fetch('/api/gtp/health').then(r => r.json())
 |---|---|---|
 | `bun install`에서 `@kaya/* not linked` | `bun run setup` 미실행 | `bun run setup` 실행 |
 | `"엔진이 꺼져 있습니다"` 토스트 | bridge 서버 미실행 | Terminal 1에서 `bun run start:engine` |
-| `"엔진 연결 실패"` / 503 | bridge 켜졌는데 KataGo spawn 실패 | `KATAGO_MODEL_PATH` 환경변수 확인, 모델 파일 존재 확인 (`ls ~/katago-models/`) |
+| `"엔진 연결 실패"` / 503 | bridge 켜졌는데 KataGo spawn 실패 | `config/engine.json`의 `modelPath` 확인, 모델 파일 존재 확인 (`ls ~/katago-models/`) |
 | `"Engine health check failed"` 콘솔 에러 | Vite proxy 실패 | `bun run dev`를 `bun run start:engine` **이후**에 실행 |
-| `humanModelAvailable: false` | Human-SL 모델 경로 오류 | `HUMAN_MODEL_PATH` 환경변수 확인 |
+| `humanModelAvailable: false` | Human-SL 모델 경로 오류 | `config/engine.json`의 `humanModelPath` 확인 |
 | AI 응답 없음 (생각만 함) | `maxTime` 초과 또는 `maxVisits` 너무 큼 | 설정 패널에서 생각시간 5초, 난이도 10급으로 조정 |
 
 ### 빠른 디버깅 명령어
@@ -130,9 +130,8 @@ curl -X POST http://localhost:8787/api/gtp/command \
   -H "Content-Type: application/json" \
   -d '{"command":"version"}'
 
-# 3. env var 확인
-echo $KATAGO_MODEL_PATH
-echo $HUMAN_MODEL_PATH
+# 3. engine 설정 확인
+cat config/engine.json
 
 # 4. 파일 존재 확인
 ls -lh ~/katago-models/
