@@ -1,6 +1,6 @@
 // ============================================================================
 // src/lib/ownership.ts
-// KataGo ownership heatmap utilities.
+// KataGo ownership overlay utilities.
 //
 // KataGo's analysis engine returns `ownership` as a flat `number[]` of length
 // `boardYSize * boardXSize`, row-major (`y * boardXSize + x`), with each value
@@ -8,6 +8,9 @@
 //   positive  → Black owns the point
 //   negative  → White owns the point
 //   magnitude → confidence (0 = nobody, 1 = fully owned)
+//
+// The overlay follows the OGS convention: small nested-square markers on
+// intersections (stones included), whose size scales with confidence.
 //
 // Reference: KataGo Analysis_Engine.md (`ownership` field).
 // ============================================================================
@@ -35,65 +38,73 @@ export function ownershipToGrid(
   return grid
 }
 
+/** Minimum |ownership| for a mark to be drawn (below this is visual noise). */
+export const OWNERSHIP_MIN_CONFIDENCE = 0.08
+
+/** Outer square side in fraction of a cell, at full confidence (|value| = 1). */
+export const OWNERSHIP_MAX_SIZE = 0.52
+
+/** Outer square side in fraction of a cell, at the confidence threshold. */
+export const OWNERSHIP_MIN_SIZE = 0.18
+
 /**
- * Map an ownership value in [-1, 1] to an `rgba(...)` fill string.
+ * Outer square side as a fraction of one cell for a given ownership value.
  *
- *   value > 0  → black tint (Black territory)
- *   value < 0  → white tint (White territory)
- *   |value|    → alpha channel (0 transparent, 0.5 max)
- *
- * The magnitude is clamped to [0, 1] so a malformed engine value cannot
- * produce an out-of-gamut alpha. Max alpha capped at 0.5 so the board
- * remains visible through the overlay.
+ * Confidence (`|value|`) maps linearly to size, clamped to
+ * [OWNERSHIP_MIN_SIZE, OWNERSHIP_MAX_SIZE] so weak ownership is still
+ * visible and malformed engine values cannot overflow the cell.
  */
-export function ownershipColor(value: number): string {
-  const alpha = Math.min(0.5, Math.max(0, Math.abs(value)))
-  if (value > 0) return `rgba(0, 0, 0, ${alpha})`
-  if (value < 0) return `rgba(255, 255, 255, ${alpha})`
-  return 'rgba(0, 0, 0, 0)'
+export function ownershipSize(value: number): number {
+  const confidence = Math.min(1, Math.max(0, Math.abs(value)))
+  return OWNERSHIP_MIN_SIZE + (OWNERSHIP_MAX_SIZE - OWNERSHIP_MIN_SIZE) * confidence
 }
 
 /**
- * A single renderable heatmap circle: SVG-space center + fill.
+ * A single renderable ownership mark.
  * `cx`/`cy` are in SVG coordinates — intersection `[x, y]` maps to
  * `(x + 0.5, y + 0.5)`, matching Shudan's Grid component which draws
- * lines at `(2*i+1) * halfVertexSize`.
+ * lines at `(x + 0.5) * vertexSize` in the content area. `size` is the
+ * outer square side in the same units, so the overlay SVG can simply use
+ * `boardSize` as its viewBox scale.
  */
-export interface OwnershipCircle {
+export interface OwnershipMark {
   readonly cx: number
   readonly cy: number
-  readonly fill: string
+  readonly size: number
+  /** `1` black-owned, `-1` white-owned. */
+  readonly sign: 1 | -1
 }
 
 /**
- * Build the list of circles to render for the ownership overlay.
+ * Build the list of ownership marks to render on the overlay.
  *
- * Only empty intersections (`signMap[y][x] === 0`) emit a circle so that
- * existing stones remain fully visible — the heatmap communicates territory
- * on empty points, which is the conventional Go analysis UI behavior
- * (Lizzie/Katago overlays do the same).
+ * Marks are drawn on empty intersections only — placed stones stay fully
+ * visible, and the surrounding empty-point marks already communicate the
+ * predicted territory (the original Sabaki/Lizzie heatmap convention).
  *
  * `signMap` is Shudan's board state: `0` empty, `1` black, `-1` white.
  */
-export function ownershipCircles(
+export function ownershipMarks(
   ownership: readonly number[],
   signMap: ReadonlyArray<ReadonlyArray<0 | 1 | -1>>,
   boardSize: number,
-): readonly OwnershipCircle[] {
+): readonly OwnershipMark[] {
   const grid = ownershipToGrid(ownership, boardSize)
   if (grid.length === 0) return []
-  const circles: OwnershipCircle[] = []
+  const marks: OwnershipMark[] = []
   for (let y = 0; y < boardSize; y++) {
     for (let x = 0; x < boardSize; x++) {
       if (signMap[y]?.[x] !== 0) continue
       const value = grid[y]![x]!
-      if (value === 0) continue
-      circles.push({
+      if (Math.abs(value) < OWNERSHIP_MIN_CONFIDENCE) continue
+      marks.push({
         cx: x + 0.5,
         cy: y + 0.5,
-        fill: ownershipColor(value),
+        size: ownershipSize(value),
+        sign: value > 0 ? 1 : -1,
       })
     }
   }
-  return circles
+  return marks
 }
+

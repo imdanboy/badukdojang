@@ -1,8 +1,10 @@
 import { describe, test, expect } from 'vitest'
 import {
   ownershipToGrid,
-  ownershipColor,
-  ownershipCircles,
+  ownershipSize,
+  ownershipMarks,
+  OWNERSHIP_MIN_CONFIDENCE,
+  OWNERSHIP_MAX_SIZE,
 } from './ownership.ts'
 
 describe('ownershipToGrid', () => {
@@ -22,51 +24,54 @@ describe('ownershipToGrid', () => {
   })
 })
 
-describe('ownershipColor', () => {
-  test('positive value → black rgba with magnitude as alpha (max 0.5)', () => {
-    expect(ownershipColor(1)).toBe('rgba(0, 0, 0, 0.5)')
-    expect(ownershipColor(0.5)).toBe('rgba(0, 0, 0, 0.5)')
-    expect(ownershipColor(0.3)).toBe('rgba(0, 0, 0, 0.3)')
+describe('ownershipSize', () => {
+  test('scales with confidence', () => {
+    expect(ownershipSize(1)).toBe(OWNERSHIP_MAX_SIZE)
+    expect(ownershipSize(-1)).toBe(OWNERSHIP_MAX_SIZE)
+    expect(ownershipSize(0.5)).toBeGreaterThan(ownershipSize(0.2))
   })
 
-  test('negative value → white rgba with magnitude as alpha (max 0.5)', () => {
-    expect(ownershipColor(-1)).toBe('rgba(255, 255, 255, 0.5)')
-    expect(ownershipColor(-0.25)).toBe('rgba(255, 255, 255, 0.25)')
-  })
-
-  test('zero → transparent', () => {
-    expect(ownershipColor(0)).toBe('rgba(0, 0, 0, 0)')
-  })
-
-  test('clamps out-of-range magnitude to [0, 0.5]', () => {
-    expect(ownershipColor(2)).toBe('rgba(0, 0, 0, 0.5)')
-    expect(ownershipColor(-2)).toBe('rgba(255, 255, 255, 0.5)')
+  test('clamps to [MIN_SIZE, MAX_SIZE] for out-of-range values', () => {
+    expect(ownershipSize(2)).toBe(OWNERSHIP_MAX_SIZE)
+    expect(ownershipSize(-3)).toBe(OWNERSHIP_MAX_SIZE)
+    expect(ownershipSize(0)).toBe(0.18)
   })
 })
 
-describe('ownershipCircles', () => {
+describe('ownershipMarks', () => {
   const signMap3 = [
     [0, 1, 0],
     [-1, 0, 0],
     [0, 0, 0],
   ] as const
+  test('emits marks only for empty intersections with confident ownership', () => {
+    const flat = [0.8, 1, -0.6, -1, 0.4, 0, 0, 0, 0.05]
+    const marks = ownershipMarks(flat, signMap3, 3)
+    // signMap3: (1,0) black stone and (0,1) white stone are skipped.
+    // (0,0)=0.8 black, (2,0)=-0.6 white, (1,1)=0.4 black pass;
+    // (2,2)=0.05 filtered as noise.
+    expect(marks).toHaveLength(3)
+    expect(marks[0]).toMatchObject({ cx: 0.5, cy: 0.5, sign: 1 })
+    expect(marks[1]).toMatchObject({ cx: 2.5, cy: 0.5, sign: -1 })
+    expect(marks[2]).toMatchObject({ cx: 1.5, cy: 1.5, sign: 1 })
+    expect(marks[0]!.size).toBeGreaterThan(marks[2]!.size)
+  })
 
-  test('emits circles only for empty intersections with non-zero ownership', () => {
-    const flat = [0.8, 1, -0.6, -1, 0.4, 0, 0, 0, 0]
-    const circles = ownershipCircles(flat, signMap3 as never, 3)
-    // empty cells: (0,0)=0.8, (2,0)=-0.6, (1,1)=0.4, (2,1),(0,2),(1,2),(2,2)=0
-    expect(circles).toHaveLength(3)
-    expect(circles[0]).toEqual({ cx: 0.5, cy: 0.5, fill: 'rgba(0, 0, 0, 0.5)' })
-    expect(circles[1]).toEqual({ cx: 2.5, cy: 0.5, fill: 'rgba(255, 255, 255, 0.5)' })
-    expect(circles[2]).toEqual({ cx: 1.5, cy: 1.5, fill: 'rgba(0, 0, 0, 0.4)' })
+  test('filters sub-threshold ownership as visual noise', () => {
+    const flat = [0, OWNERSHIP_MIN_CONFIDENCE / 2, 0, 0, 0, 0, 0, 0, 0]
+    expect(ownershipMarks(flat, signMap3, 3)).toEqual([])
   })
 
   test('returns empty when ownership length mismatches boardSize', () => {
-    expect(ownershipCircles([1, 2], signMap3 as never, 3)).toEqual([])
+    expect(ownershipMarks([1, 2], signMap3, 3)).toEqual([])
   })
 
-  test('skips zero-ownership empty points', () => {
-    const flat = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-    expect(ownershipCircles(flat, signMap3 as never, 3)).toEqual([])
+  test('skips occupied intersections', () => {
+    const flat = new Array(9).fill(1)
+    const marks = ownershipMarks(flat, signMap3, 3)
+    // Only the 7 empty cells get marks; (1,0) and (0,1) are occupied.
+    expect(marks).toHaveLength(7)
+    expect(marks.every((m) => !(m.cx === 1.5 && m.cy === 0.5))).toBe(true)
+    expect(marks.every((m) => !(m.cx === 0.5 && m.cy === 1.5))).toBe(true)
   })
 })

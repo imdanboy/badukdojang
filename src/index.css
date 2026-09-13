@@ -128,6 +128,38 @@ body {
   max-width: min(100%, calc(100svh - 210px));
 }
 
+/* --- Ownership overlay (OGS-style nested-square confidence marks) ------------- */
+
+.ownership-overlay {
+  z-index: 15;
+  overflow: visible;
+}
+
+.ownership-mark-outer {
+  fill: none;
+  stroke-width: 0.05;
+}
+
+.ownership-mark-inner {
+  stroke: none;
+}
+
+.ownership-mark_black .ownership-mark-outer {
+  stroke: rgba(0, 0, 0, 0.85);
+}
+
+.ownership-mark_black .ownership-mark-inner {
+  fill: rgba(0, 0, 0, 0.8);
+}
+
+.ownership-mark_white .ownership-mark-outer {
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+.ownership-mark_white .ownership-mark-inner {
+  fill: rgba(255, 255, 255, 0.9);
+}
+
 .playback-bar {
   display: flex;
   align-items: center;

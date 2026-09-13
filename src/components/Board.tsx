@@ -5,13 +5,15 @@
  * Flashes a red border for 200ms when an illegal move is attempted.
  * The board theme is read from BoardThemeProvider context — the single
  * source of truth (no duplicated theme state in App).
+ * Ownership overlay: OGS-style nested-square marks sized by confidence,
+ * rendered as an SVG layer aligned to the Goban's measured content area.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Goban } from '@kaya/shudan'
 import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
 import { useBoardTheme } from '@kaya/themes'
-import { ownershipToGrid } from '../lib/ownership.ts'
+import { ownershipMarks } from '../lib/ownership.ts'
 
 export interface BoardProps {
   signMap: SignMap
@@ -25,12 +27,19 @@ export interface BoardProps {
   aiFlashVertex?: Vertex | null
   /** KataGo ownership flat array (length boardSize^2, [-1,1]). null/undefined = no data. */
   ownership?: readonly number[] | null
-  /** Toggle the ownership heatmap overlay on/off. */
+  /** Toggle the ownership overlay on/off. */
   showOwnership?: boolean
   /** Top-N candidate move vertices to render as letter markers (A, B, C...). */
   candidateMoves?: Vertex[] | undefined
   /** Vertices to dim (e.g., dead stones in scoring mode). */
   dimmedVertices?: Vertex[] | undefined
+}
+
+/** Rect of the Goban's board-content area in wrapper coordinates. */
+interface ContentRect {
+  left: number
+  top: number
+  size: number
 }
 
 export function Board({
@@ -50,7 +59,9 @@ export function Board({
 }: BoardProps) {
   const { boardTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [contentRect, setContentRect] = useState<ContentRect | null>(null)
   const [flashError, setFlashError] = useState(false)
   const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
 
@@ -66,6 +77,36 @@ export function Board({
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
+
+  // Measure the actual board-content area (`.shudan-content` inside the
+  // Goban DOM) instead of reconstructing Goban's coordinate padding
+  // arithmetic — immune to any future padding changes in Shudan.
+  useEffect(() => {
+    if (!showOwnership) {
+      setContentRect(null)
+      return
+    }
+    const wrapEl = wrapRef.current
+    const contentEl = wrapEl?.querySelector('.shudan-content')
+    if (wrapEl === null || wrapEl === undefined || contentEl === null || contentEl === undefined) {
+      return
+    }
+
+    const update = () => {
+      const wrapRect = wrapEl.getBoundingClientRect()
+      const rect = contentEl.getBoundingClientRect()
+      setContentRect({
+        left: rect.left - wrapRect.left,
+        top: rect.top - wrapRect.top,
+        size: rect.width,
+      })
+    }
+    update()
+
+    const observer = new ResizeObserver(update)
+    observer.observe(contentEl)
+    return () => observer.disconnect()
+  }, [showOwnership, containerWidth, boardSize])
 
   useEffect(() => {
     if (flashTrigger === 0) return
@@ -95,10 +136,10 @@ export function Board({
     return { type: 'circle' }
   }, [aiGhostVertex, hoveredVertex])
 
-  const ownershipMap = useMemo<number[][] | undefined>(() => {
-    if (!showOwnership || ownership === null) return undefined
-    return ownershipToGrid(ownership, boardSize)
-  }, [showOwnership, ownership, boardSize])
+  const ownershipMarksList = useMemo(() => {
+    if (!showOwnership || ownership === null) return null
+    return ownershipMarks(ownership, signMap, boardSize)
+  }, [showOwnership, ownership, signMap, boardSize])
 
   // Merge the last-move markerMap (circle) with candidate letter markers
   // (A, B, C). Candidates override the last-move circle at overlapping
@@ -168,20 +209,61 @@ export function Board({
 
   return (
     <div ref={containerRef} style={containerStyle} className="board-container">
-      <Goban
-        className={`shudan-theme-${boardTheme}`}
-        vertexSize={vertexSize}
-        signMap={signMap}
-        showCoordinates={showCoordinates}
-        currentPlayer={currentPlayer}
-        onVertexMouseMove={handleMouseMove}
-        {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
-        {...(onVertexClick !== undefined ? { onVertexClick } : {})}
-        {...(ghostMarker !== null ? { ghostMarker } : {})}
-        {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
-        {...(ownershipMap !== undefined ? { ownershipMap } : {})}
-        {...(heatMap !== undefined ? { heatMap } : {})}
-      />
+      <div ref={wrapRef} className="board-goban-wrap" style={{ position: 'relative' }}>
+        <Goban
+          className={`shudan-theme-${boardTheme}`}
+          vertexSize={vertexSize}
+          signMap={signMap}
+          showCoordinates={showCoordinates}
+          currentPlayer={currentPlayer}
+          onVertexMouseMove={handleMouseMove}
+          {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
+          {...(onVertexClick !== undefined ? { onVertexClick } : {})}
+          {...(ghostMarker !== null ? { ghostMarker } : {})}
+          {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
+          {...(heatMap !== undefined ? { heatMap } : {})}
+        />
+        {ownershipMarksList !== null && contentRect !== null && (
+          <svg
+            className="ownership-overlay"
+            viewBox={`0 0 ${boardSize} ${boardSize}`}
+            style={{
+              position: 'absolute',
+              top: contentRect.top,
+              left: contentRect.left,
+              width: contentRect.size,
+              height: contentRect.size,
+              pointerEvents: 'none',
+            }}
+          >
+            {ownershipMarksList.map((m) => {
+              const half = m.size / 2
+              const inner = m.size * 0.55
+              return (
+                <g
+                  key={`${m.cx}-${m.cy}`}
+                  className={`ownership-mark ownership-mark_${m.sign === 1 ? 'black' : 'white'}`}
+                >
+                  <rect
+                    x={m.cx - half}
+                    y={m.cy - half}
+                    width={m.size}
+                    height={m.size}
+                    className="ownership-mark-outer"
+                  />
+                  <rect
+                    x={m.cx - inner / 2}
+                    y={m.cy - inner / 2}
+                    width={inner}
+                    height={inner}
+                    className="ownership-mark-inner"
+                  />
+                </g>
+              )
+            })}
+          </svg>
+        )}
+      </div>
     </div>
   )
 }
