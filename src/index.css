@@ -1,6 +1,7 @@
 /*
- * badukdojang - global styles
- * T1 shell: centered full-viewport container. Game-specific styles land in T2.
+ * badukdojang - global styles.
+ * Layout structure (top bar, 2-column game layout, modals, zen mode)
+ * lives here as classes; component internals use inline styles.
  */
 
 *,
@@ -33,9 +34,7 @@ body {
   min-height: 100vh;
   min-height: 100svh;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   background: var(--bg, #ffffff);
   color: var(--text, #111111);
 }
@@ -47,7 +46,213 @@ body {
   }
 }
 
-/* AI thinking ghost stone pulsation */
+/* --- App shell ------------------------------------------------------------- */
+
+#app-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  min-height: 100svh;
+  padding: 12px 16px 20px;
+}
+
+/* --- Top bar ---------------------------------------------------------------- */
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  color: #e0e0e0;
+  flex-wrap: wrap;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.top-bar-stone {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #6b6b7e, #111 70%);
+  border: 1px solid #555;
+  flex-shrink: 0;
+}
+
+.top-bar-title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+.top-bar-mode {
+  display: flex;
+  gap: 4px;
+}
+
+.top-bar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* --- Game layout (center board column + sidebar) ----------------------------- */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+  flex: 1;
+}
+
+.board-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Keep the board fully visible without scrolling on desktop. */
+.board-container {
+  max-width: min(100%, calc(100svh - 210px));
+}
+
+.playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  color: #e0e0e0;
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .board-container {
+    max-width: 100%;
+  }
+}
+
+/* --- Zen mode (board only) --------------------------------------------------- */
+
+#app-root.zen-mode {
+  justify-content: center;
+  align-items: center;
+}
+
+#app-root.zen-mode .game-layout {
+  grid-template-columns: 1fr;
+  align-items: center;
+  width: 100%;
+}
+
+#app-root.zen-mode .board-col {
+  justify-content: center;
+  flex: 1;
+}
+
+#app-root.zen-mode .board-container {
+  max-width: min(100%, 100svh);
+}
+
+#zen-exit {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 500;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #3b3b5c;
+  background: rgba(26, 26, 46, 0.85);
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* --- Modal -------------------------------------------------------------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  padding: 16px;
+}
+
+.modal-panel {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border-radius: 12px;
+  border: 1px solid #3b3b5c;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #3b3b5c;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.modal-close {
+  border: none;
+  background: #3b3b5c;
+  color: #e0e0e0;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: #4a4a7c;
+}
+
+.modal-body {
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- Board effects (from earlier iterations) --------------------------------- */
+
 @keyframes ghost-pulse {
   0%, 100% {
     opacity: 0.5;

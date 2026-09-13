@@ -3,20 +3,15 @@
  * Measures container width via ResizeObserver and computes vertexSize
  * as a fixed pixel number (Shudan requires numeric vertexSize, not CSS).
  * Flashes a red border for 200ms when an illegal move is attempted.
+ * The board theme is read from BoardThemeProvider context — the single
+ * source of truth (no duplicated theme state in App).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Goban } from '@kaya/shudan'
 import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
+import { useBoardTheme } from '@kaya/themes'
 import { ownershipToGrid } from '../lib/ownership.ts'
-
-export type ThemeName =
-  | 'hikaru'
-  | 'shell-slate'
-  | 'yunzi'
-  | 'happy-stones'
-  | 'kifu'
-  | 'baduktv'
 
 export interface BoardProps {
   signMap: SignMap
@@ -25,7 +20,6 @@ export interface BoardProps {
   onVertexClick?: ((evt: React.MouseEvent, vertex: Vertex) => void) | undefined
   flashTrigger?: number
   showCoordinates?: boolean
-  themeName?: ThemeName
   currentPlayer: 1 | -1
   aiGhostVertex?: Vertex | null
   aiFlashVertex?: Vertex | null
@@ -46,7 +40,6 @@ export function Board({
   onVertexClick,
   flashTrigger = 0,
   showCoordinates = true,
-  themeName = 'hikaru',
   currentPlayer,
   aiGhostVertex = null,
   aiFlashVertex = null,
@@ -55,6 +48,7 @@ export function Board({
   candidateMoves = undefined,
   dimmedVertices = undefined,
 }: BoardProps) {
+  const { boardTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [flashError, setFlashError] = useState(false)
@@ -166,7 +160,6 @@ export function Board({
 
   const containerStyle: CSSProperties = {
     width: '100%',
-    maxWidth: '600px',
     display: 'flex',
     justifyContent: 'center',
     border: flashError ? '3px solid red' : '3px solid transparent',
@@ -174,9 +167,9 @@ export function Board({
   }
 
   return (
-    <div ref={containerRef} style={containerStyle}>
+    <div ref={containerRef} style={containerStyle} className="board-container">
       <Goban
-        className={`shudan-theme-${themeName}`}
+        className={`shudan-theme-${boardTheme}`}
         vertexSize={vertexSize}
         signMap={signMap}
         showCoordinates={showCoordinates}

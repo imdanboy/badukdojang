@@ -23,6 +23,10 @@ export interface GameState {
   getSignMap(): SignMap
   undo(): boolean
   redo(): boolean
+  /** Navigate back to the first move. Returns true if the position changed. */
+  jumpToStart(): boolean
+  /** Navigate forward to the last move of the current branch. Returns true if changed. */
+  jumpToEnd(): boolean
 }
 
 export function createGameState(size: number, initialTree?: GameTree): GameState {
@@ -100,6 +104,22 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     return true
   }
 
+  function jumpToStart(): boolean {
+    let changed = false
+    while (undo()) {
+      changed = true
+    }
+    return changed
+  }
+
+  function jumpToEnd(): boolean {
+    let changed = false
+    while (redo()) {
+      changed = true
+    }
+    return changed
+  }
+
   function getSignMap(): SignMap {
     return board.signMap
   }
@@ -122,5 +142,7 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     getSignMap,
     undo,
     redo,
+    jumpToStart,
+    jumpToEnd,
   }
 }

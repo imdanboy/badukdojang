@@ -1,30 +1,37 @@
 /*
- * badukdojang - T6: Control Bar Integration + T7: AI Game Mode
- * ControlBar (above board) + Shudan Goban rendering + go-board game logic.
- * Clicking an empty intersection places a stone. Illegal moves flash red border.
- * AI mode: after human plays, engine auto-generates a response.
+ * badukdojang — game screen composition.
+ *
+ * Layout (OGS-inspired): top bar + two columns — board & playback bar in
+ * the center, core game controls in the sidebar. Non-core configuration
+ * (engine tuning, board theme) lives in SettingsModal; per-game setup
+ * (size, mode, difficulty) in NewGameModal. Zen mode hides everything
+ * but the board.
+ *
+ * Game flow state lives here; engine lifecycle in useEngine, analysis
+ * polling in useAnalysis, scoring flow in useScoring.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SignMap, Vertex } from '@kaya/goboard'
 import type { BoardMap, Marker } from '@kaya/shudan'
-import { BoardThemeProvider, useBoardTheme } from '@kaya/themes'
-import { Board, type ThemeName } from './components/Board.tsx'
-import { ControlBar, type BoardSize } from './components/ControlBar.tsx'
-import {
-  EngineSettings,
-  loadSettings,
-  normalizeSettings,
-} from './components/EngineSettings.tsx'
-import type { EngineSettings as EngineSettingsType } from './components/EngineSettings.tsx'
-import { AnalysisPanel } from './components/AnalysisPanel.tsx'
-import { CandidateMoves, type CandidateMove } from './components/CandidateMoves.tsx'
+import { BoardThemeProvider } from '@kaya/themes'
+import { Board } from './components/Board.tsx'
+import { TopBar } from './components/TopBar.tsx'
+import { GameSidebar } from './components/GameSidebar.tsx'
+import { PlaybackBar } from './components/PlaybackBar.tsx'
+import { SettingsModal } from './components/SettingsModal.tsx'
+import { NewGameModal } from './components/NewGameModal.tsx'
+import type { NewGameConfig } from './components/NewGameModal.tsx'
+import { Toast } from './components/Toast.tsx'
+import { EngineErrorModal } from './components/EngineErrorModal.tsx'
 import { ScoringModal } from './components/ScoringModal.tsx'
-import type { AnalyzeResponse } from './lib/engine/types.ts'
+import type { CandidateMove } from './components/CandidateMoves.tsx'
+import { useEngine } from './hooks/useEngine.ts'
+import { useAnalysis } from './hooks/useAnalysis.ts'
+import { useScoring } from './hooks/useScoring.ts'
+import type { BoardSize, GameMode } from './lib/types.ts'
 import { createGameState } from './lib/gameState.ts'
 import type { GameState } from './lib/gameState.ts'
 import { getMoveList } from './lib/gameTree.ts'
-import type { ScoringResult, ComputedScore } from './lib/scoring.ts'
-import { computeScore } from './lib/scoring.ts'
 import {
   downloadSGF,
   getBoardSizeFromTree,
@@ -36,68 +43,102 @@ import {
   setSoundEnabled,
   isSoundEnabled,
 } from './lib/sound.ts'
+import { applyDifficulty, applyPlayStyle } from './lib/engineSettings.ts'
 import * as katagoAdapter from './lib/engine/katagoAdapter.ts'
 import { EngineError } from './lib/engine/types.ts'
-import type { EngineSettings as EngineEngineSettings } from './lib/engine/types.ts'
-
-export type GameMode = 'selfplay' | 'ai'
-
-function ThemeSync({ theme }: { theme: ThemeName }) {
-  const { setBoardTheme } = useBoardTheme()
-  useEffect(() => {
-    setBoardTheme(theme)
-  }, [theme, setBoardTheme])
-  return null
-}
 
 export function App() {
+  // --- Game state -----------------------------------------------------------
   const [boardSize, setBoardSize] = useState<BoardSize>(19)
-  const [gameState, setGameState] = useState(() => createGameState(19))
+  const [gameState, setGameState] = useState<GameState>(() => createGameState(19))
   const [signMap, setSignMap] = useState<SignMap>(() => gameState.getSignMap())
   const [flashTrigger, setFlashTrigger] = useState(0)
+  const [moveVersion, setMoveVersion] = useState(0)
+
+  // --- View state -----------------------------------------------------------
   const [showCoordinates, setShowCoordinates] = useState(true)
-  const [themeName, setThemeName] = useState<ThemeName>('hikaru')
   const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled())
-  const [engineSettings, setEngineSettings] = useState<EngineSettingsType>(() =>
-    normalizeSettings(loadSettings()),
-  )
+  const [showOwnership, setShowOwnership] = useState(false)
+  const [analysisEnabled, setAnalysisEnabled] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [newGameOpen, setNewGameOpen] = useState(false)
+  const [zenMode, setZenMode] = useState(false)
+
+  // --- AI game mode ---------------------------------------------------------
   const [gameMode, setGameMode] = useState<GameMode>('selfplay')
   const [isAiThinking, setIsAiThinking] = useState(false)
   const isAiThinkingRef = useRef(false)
   const gameGenerationRef = useRef(0)
   const [aiGhostVertex, setAiGhostVertex] = useState<Vertex | null>(null)
   const [aiFlashVertex, setAiFlashVertex] = useState<Vertex | null>(null)
-  const [ownership, setOwnership] = useState<readonly number[] | null>(null)
-  const [showOwnership, setShowOwnership] = useState(false)
+
+  // --- Toast ----------------------------------------------------------------
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<number | null>(null)
-  const [winrateAnalysis, setWinrateAnalysis] = useState<AnalyzeResponse | null>(null)
-  const [winrateLoading, setWinrateLoading] = useState(false)
-  const [winrateError, setWinrateError] = useState<string | null>(null)
-  const winrateReqRef = useRef(0)
-  const [engineError, setEngineError] = useState<EngineError | null>(null)
-  const [isRestarting, setIsRestarting] = useState(false)
 
-  const [isScoring, setIsScoring] = useState(false)
-  const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null)
-  const [manualOverrides, setManualOverrides] = useState(new Map<string, 'dead' | 'alive'>())
-  const [computedScore, setComputedScore] = useState<ComputedScore | null>(null)
-  const [humanModelAvailable, setHumanModelAvailable] = useState<boolean | null>(null)
-  const engineInitializedRef = useRef(false)
-  const [moveVersion, setMoveVersion] = useState(0)
-  const [analysisEnabled, setAnalysisEnabled] = useState(true)
+  // --- Engine (settings + lifecycle) ----------------------------------------
+  const showToast = useCallback((message: string) => {
+    setToast(message)
+  }, [])
 
-  // Re-initialize game state whenever the size changes.
+  const {
+    engineSettings,
+    setEngineSettings,
+    humanModelAvailable,
+    engineError,
+    setEngineError,
+    isRestarting,
+    handleRestartEngine,
+    getAnalysisSettings,
+    getLightAnalysisSettings,
+    ANALYSIS_TIMEOUT,
+  } = useEngine({ boardSize, showToast })
+
+  // --- Analysis polling -----------------------------------------------------
+  const {
+    winrateAnalysis,
+    winrateLoading,
+    winrateError,
+    ownership,
+  } = useAnalysis({
+    engineEnabled: engineSettings.enabled,
+    analysisEnabled,
+    signMap,
+    gameState,
+    getLightAnalysisSettings,
+    timeoutMs: ANALYSIS_TIMEOUT,
+  })
+
+  // --- Scoring flow ---------------------------------------------------------
+  const canScore = useMemo(() => {
+    return getMoveList(gameState.gameTree).length >= 2
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.gameTree, moveVersion])
+
+  const {
+    isScoring,
+    effectiveDeadStones,
+    computedScore,
+    handleScore,
+    handleToggleDead,
+    handleAcceptScore,
+    handleCancelScore,
+  } = useScoring({
+    signMap,
+    gameState,
+    canScore,
+    isAiThinkingRef,
+    getAnalysisSettings,
+    showToast,
+    setEngineError,
+  })
+
+  // Re-initialize game state whenever the size changes (SGF load path).
   useEffect(() => {
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
-    setOwnership(null)
   }, [boardSize])
-
-  useEffect(() => {
-    setOwnership(null)
-  }, [signMap])
 
   // Auto-dismiss toast after 3 seconds.
   useEffect(() => {
@@ -116,33 +157,7 @@ export function App() {
     }
   }, [toast])
 
-  const showToast = useCallback((message: string) => {
-    setToast(message)
-  }, [])
-
-  const canScore = useMemo(() => {
-    return getMoveList(gameState.gameTree).length >= 2
-  }, [gameState.gameTree, moveVersion])
-
-  const effectiveDeadStones = useMemo(() => {
-    if (scoringResult === null) return []
-    const result: [number, number][] = []
-    const overrideSet = new Set<string>()
-    for (const [key, status] of manualOverrides.entries()) {
-      if (status === 'dead') {
-        const [x, y] = key.split(',').map(Number) as [number, number]
-        result.push([x, y])
-      }
-      overrideSet.add(key)
-    }
-    for (const v of scoringResult.dead) {
-      const key = `${v[0]},${v[1]}`
-      if (!overrideSet.has(key)) {
-        result.push(v)
-      }
-    }
-    return result
-  }, [scoringResult, manualOverrides])
+  // --- Marker maps (last-move circle + scoring crosses) ----------------------
 
   const scoringMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     if (!isScoring || effectiveDeadStones.length === 0) return undefined
@@ -156,32 +171,18 @@ export function App() {
     return map
   }, [signMap, isScoring, effectiveDeadStones])
 
-  // Build markerMap: a 2D array (indexed [y][x]) with a single 'point'
-  // marker at the last-move position, null everywhere else.
-  const markerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
-    if (gameState.lastMove === null) return undefined
-    const [lx, ly] = gameState.lastMove
+  const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
+    if (gameState.lastMove === null && scoringMarkerMap === undefined) {
+      return undefined
+    }
     const map: BoardMap<Marker | null> = signMap.map((row) =>
       row.map(() => null),
     )
-    const row = map[ly]
-    if (row !== undefined) {
-      row[lx] = { type: 'circle' }
-    }
-    return map
-  }, [signMap, gameState.lastMove])
-
-  const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
-    if (scoringMarkerMap === undefined && markerMap === undefined) return undefined
-    const map: BoardMap<Marker | null> = signMap.map((row) => row.map(() => null))
-    if (markerMap !== undefined) {
-      for (let y = 0; y < map.length; y++) {
-        for (let x = 0; x < map[y]!.length; x++) {
-          const m = markerMap[y]?.[x]
-          if (m !== undefined && m !== null) {
-            map[y]![x] = m
-          }
-        }
+    if (gameState.lastMove !== null) {
+      const [lx, ly] = gameState.lastMove
+      const row = map[ly]
+      if (row !== undefined) {
+        row[lx] = { type: 'circle' }
       }
     }
     if (scoringMarkerMap !== undefined) {
@@ -195,11 +196,10 @@ export function App() {
       }
     }
     return map
-  }, [signMap, markerMap, scoringMarkerMap])
+  }, [signMap, gameState.lastMove, scoringMarkerMap])
 
-  // Derive top-3 candidate moves from the latest analysis response.
-  // Only shown in self-play mode (study/hint); hidden in AI mode and
-  // while the AI is thinking. 'resign' moves are filtered out.
+  // --- Candidates (self-play study hints) ------------------------------------
+
   const candidates = useMemo<CandidateMove[]>(() => {
     if (gameMode !== 'selfplay') return []
     if (winrateAnalysis === null) return []
@@ -225,7 +225,7 @@ export function App() {
       })
     }
     return result
-  }, [winrateAnalysis, gameMode])
+  }, [winrateAnalysis, gameMode, boardSize])
 
   const candidateVertices = useMemo<Vertex[]>(
     () =>
@@ -235,9 +235,11 @@ export function App() {
     [candidates],
   )
 
+  // --- Move application -------------------------------------------------------
+
   /**
    * Apply a move (vertex or pass) to the game state, update the sign map,
-   * and play sounds. Mirrors the existing human handleVertexClick flow.
+   * and play sounds.
    */
   const applyMove = useCallback(
     (move: Vertex | 'pass', gs: GameState = gameState): boolean => {
@@ -268,241 +270,6 @@ export function App() {
     [gameState],
   )
 
-  const getAnalysisSettings = useCallback((): EngineEngineSettings => {
-    return {
-      maxTime: engineSettings.thinkingTime,
-      maxVisits: engineSettings.maxVisits,
-      numSearchThreads: 2,
-      rules: engineSettings.rules,
-      komi: engineSettings.rules === 'chinese' ? 7.5 : 6.5,
-      humanSLProfile: engineSettings.humanSLProfile,
-      chosenMoveTemperature: engineSettings.chosenMoveTemperature,
-      wideRootNoise: engineSettings.wideRootNoise,
-      playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
-      humanSLChosenMoveProp: engineSettings.humanSLChosenMoveProp,
-      humanMoveMode: engineSettings.humanMoveMode,
-      boardSize,
-      difficulty: engineSettings.difficulty,
-      playStyle: engineSettings.playStyle,
-    }
-  }, [engineSettings, boardSize])
-
-  const ANALYSIS_TIMEOUT = 15000
-  const LIGHT_MAX_VISITS = 5
-  const LIGHT_MAX_TIME = 1
-  const getLightAnalysisSettings = useCallback((): EngineEngineSettings => {
-    return {
-      maxTime: LIGHT_MAX_TIME,
-      maxVisits: LIGHT_MAX_VISITS,
-      numSearchThreads: 2,
-      rules: engineSettings.rules,
-      komi: engineSettings.rules === 'chinese' ? 7.5 : 6.5,
-      humanSLProfile: engineSettings.humanSLProfile,
-      chosenMoveTemperature: engineSettings.chosenMoveTemperature,
-      wideRootNoise: engineSettings.wideRootNoise,
-      playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
-      humanSLChosenMoveProp: engineSettings.humanSLChosenMoveProp,
-      humanMoveMode: engineSettings.humanMoveMode,
-      boardSize,
-      difficulty: engineSettings.difficulty,
-      playStyle: engineSettings.playStyle,
-    }
-  }, [engineSettings, boardSize])
-
-  const handleRestartEngine = useCallback(async () => {
-    if (isRestarting) return
-    setIsRestarting(true)
-    try {
-      await katagoAdapter.restartEngine(getAnalysisSettings())
-      setEngineError(null)
-      showToast('엔진이 재시작되었습니다.')
-    } catch (err) {
-      showToast(
-        '엔진 재시작 실패: ' +
-          (err instanceof Error ? err.message : String(err)),
-      )
-    } finally {
-      setIsRestarting(false)
-    }
-  }, [isRestarting, getAnalysisSettings, showToast])
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const health = await katagoAdapter.checkHealth()
-        setHumanModelAvailable(health.humanModelAvailable ?? false)
-        if (engineSettings.enabled && health.status === 'ok') {
-          await katagoAdapter.initializeEngine(getAnalysisSettings())
-          engineInitializedRef.current = true
-        }
-      } catch (err) {
-        console.error('Engine health check failed:', err)
-        setHumanModelAvailable(false)
-        if (err instanceof EngineError) {
-          setEngineError(err)
-        }
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (!engineSettings.enabled) {
-      engineInitializedRef.current = false
-      return
-    }
-    if (engineInitializedRef.current) return
-    void katagoAdapter.initializeEngine(getAnalysisSettings()).catch((err) => {
-      console.error('Engine initialization failed:', err)
-      if (err instanceof EngineError) {
-        setEngineError(err)
-      }
-    })
-    engineInitializedRef.current = true
-  }, [engineSettings.enabled, getAnalysisSettings])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    void katagoAdapter.setEngineRules(engineSettings.rules).catch((err) => {
-      console.error('Failed to set engine rules:', err)
-      if (err instanceof EngineError) {
-        setEngineError(err)
-      }
-    })
-  }, [engineSettings.rules, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    if (engineSettings.playStyle !== 'human') return
-    if (engineSettings.humanSLProfile === undefined) return
-    void katagoAdapter
-      .setEngineParam('humanSLProfile', engineSettings.humanSLProfile)
-      .catch((err) => {
-        console.error('Failed to set humanSLProfile:', err)
-        if (err instanceof EngineError) {
-          setEngineError(err)
-        }
-      })
-  }, [engineSettings.humanSLProfile, engineSettings.playStyle, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    void katagoAdapter
-      .setEngineParam('chosenMoveTemperature', engineSettings.chosenMoveTemperature)
-      .catch((err) => {
-        console.error('Failed to set chosenMoveTemperature:', err)
-      })
-  }, [engineSettings.chosenMoveTemperature, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    void katagoAdapter
-      .setEngineParam('wideRootNoise', engineSettings.wideRootNoise)
-      .catch((err) => {
-        console.error('Failed to set wideRootNoise:', err)
-      })
-  }, [engineSettings.wideRootNoise, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    void katagoAdapter
-      .setEngineParam('maxVisits', engineSettings.maxVisits)
-      .catch((err) => {
-        console.error('Failed to set maxVisits:', err)
-        if (err instanceof EngineError) {
-          setEngineError(err)
-        }
-      })
-  }, [engineSettings.maxVisits, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    void katagoAdapter
-      .setEngineParam('maxTime', engineSettings.thinkingTime)
-      .catch((err) => {
-        console.error('Failed to set maxTime:', err)
-        if (err instanceof EngineError) {
-          setEngineError(err)
-        }
-      })
-  }, [engineSettings.thinkingTime, engineSettings.enabled])
-
-  useEffect(() => {
-    if (!engineSettings.enabled || !engineInitializedRef.current) return
-    if (engineSettings.playStyle !== 'human') return
-    void katagoAdapter
-      .setEngineParam('humanSLChosenMoveProp', engineSettings.humanSLChosenMoveProp)
-      .catch((err) => {
-        console.error('Failed to set humanSLChosenMoveProp:', err)
-        if (err instanceof EngineError) {
-          setEngineError(err)
-        }
-      })
-  }, [engineSettings.humanSLChosenMoveProp, engineSettings.playStyle, engineSettings.enabled])
-
-  useEffect(() => {
-    if (
-      engineSettings.playStyle === 'human' &&
-      humanModelAvailable === false
-    ) {
-      showToast('Human-SL 모델이 설정되지 않았습니다.')
-    }
-  }, [engineSettings.playStyle, humanModelAvailable, showToast])
-
-  // Race-guarded: only the latest fetch's result is applied.
-  // Cancels in-flight request on re-fire to prevent bridge-side
-  // concurrency on the single katago analysis process stdout.
-  useEffect(() => {
-    if (!engineSettings.enabled || !analysisEnabled) {
-      setWinrateAnalysis(null)
-      setWinrateError(null)
-      setWinrateLoading(false)
-      return
-    }
-
-    const hasAnyStone = signMap.some((row) => row.some((cell) => cell !== 0))
-    if (!hasAnyStone) {
-      setWinrateAnalysis(null)
-      setWinrateError(null)
-      setWinrateLoading(false)
-      return
-    }
-
-    const reqId = ++winrateReqRef.current
-    setWinrateLoading(true)
-    setWinrateError(null)
-
-    const controller = new AbortController()
-    let cancelled = false
-    void (async () => {
-      try {
-        const analysis = await katagoAdapter.requestAnalysis(
-          gameState.gameTree,
-          gameState.currentPlayer,
-          getLightAnalysisSettings(),
-          controller.signal,
-          ANALYSIS_TIMEOUT,
-        )
-        if (cancelled || reqId !== winrateReqRef.current) return
-        setWinrateAnalysis(analysis)
-        setOwnership(analysis.ownership ?? null)
-        setWinrateError(null)
-      } catch (err) {
-        if (cancelled || reqId !== winrateReqRef.current) return
-        setWinrateError(err instanceof Error ? err.message : String(err))
-      } finally {
-        if (!cancelled && reqId === winrateReqRef.current) {
-          setWinrateLoading(false)
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [signMap, engineSettings.enabled, analysisEnabled, gameState, getLightAnalysisSettings])
-
   const triggerAiMove = useCallback(async () => {
     if (isAiThinkingRef.current) return
     if (!engineSettings.enabled) {
@@ -527,6 +294,7 @@ export function App() {
       } else if (response === 'pass') {
         gameState.pass()
         setSignMap(gameState.getSignMap())
+        setMoveVersion((v) => v + 1)
         playStoneSound()
       } else {
         const oldCaptures =
@@ -544,6 +312,7 @@ export function App() {
             playStoneSound()
           }
           setSignMap(gameState.getSignMap())
+          setMoveVersion((v) => v + 1)
           setAiFlashVertex(response)
         }
       }
@@ -572,7 +341,7 @@ export function App() {
         setAiGhostVertex(null)
       }
     }
-  }, [gameState, showToast, getAnalysisSettings, engineSettings.enabled])
+  }, [gameState, showToast, getAnalysisSettings, engineSettings.enabled, setEngineError])
 
   const handleVertexClick = (_evt: React.MouseEvent, vertex: Vertex) => {
     if (isAiThinkingRef.current) return
@@ -593,7 +362,9 @@ export function App() {
     applyMove(vertex)
   }
 
-  const handleNewGame = () => {
+  // --- Game lifecycle ---------------------------------------------------------
+
+  const abortAiAndReset = useCallback(() => {
     if (isAiThinkingRef.current) {
       void katagoAdapter.abortOngoing().catch(() => {})
     }
@@ -601,12 +372,38 @@ export function App() {
     setIsAiThinking(false)
     setAiGhostVertex(null)
     setAiFlashVertex(null)
-    setOwnership(null)
     gameGenerationRef.current += 1
+  }, [])
+
+  /** Hard reset to an empty board (keeps current size/mode). */
+  const handleNewGame = useCallback(() => {
+    abortAiAndReset()
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
-  }
+    setMoveVersion((v) => v + 1)
+  }, [abortAiAndReset, boardSize])
+
+  /** New-game modal confirm: apply config, reset the board. */
+  const handleStartNewGame = useCallback(
+    (config: NewGameConfig) => {
+      setEngineSettings((prev) =>
+        applyPlayStyle(applyDifficulty(prev, config.difficulty), config.playStyle),
+      )
+      abortAiAndReset()
+      const newGameState = createGameState(config.size)
+      setGameState(newGameState)
+      setSignMap(newGameState.getSignMap())
+      setMoveVersion((v) => v + 1)
+      setBoardSize(config.size)
+      setGameMode(config.mode)
+      if (config.mode === 'ai' && !engineSettings.enabled) {
+        showToast('엔진이 꺼져 있습니다. AI 대국을 위해 엔진을 켜주세요.')
+      }
+      setNewGameOpen(false)
+    },
+    [abortAiAndReset, setEngineSettings, engineSettings.enabled, showToast],
+  )
 
   const handlePass = () => {
     if (isAiThinkingRef.current) return
@@ -636,6 +433,16 @@ export function App() {
     }
   }
 
+  const navigate = (fn: () => boolean) => {
+    if (isAiThinkingRef.current) return
+    if (fn()) {
+      setSignMap(gameState.getSignMap())
+      setMoveVersion((v) => v + 1)
+    }
+  }
+
+  // --- SGF ---------------------------------------------------------------------
+
   const handleSaveSGF = () => {
     const filename = `game-${Date.now()}.sgf`
     downloadSGF(gameState.gameTree, filename, boardSize)
@@ -660,12 +467,15 @@ export function App() {
       const newGameState = createGameState(validSize, loadedTree)
       setGameState(newGameState)
       setSignMap(newGameState.getSignMap())
+      setMoveVersion((v) => v + 1)
     } catch (error) {
       console.error('Failed to load SGF:', error)
     } finally {
       input.value = ''
     }
   }
+
+  // --- Top bar handlers ---------------------------------------------------------
 
   const handleToggleSound = () => {
     const next = !soundEnabled
@@ -701,264 +511,137 @@ export function App() {
     void triggerAiMove()
   }
 
-  const handleScore = useCallback(async () => {
-    if (!canScore || isAiThinkingRef.current) return
-    setIsScoring(true)
-    setManualOverrides(new Map())
-    try {
-      const result = await katagoAdapter.requestScoring(
-        gameState.gameTree,
-        getAnalysisSettings(),
-      )
-      setScoringResult(result)
-      const score = computeScore(signMap, result.dead, result.komi)
-      setComputedScore(score)
-    } catch (err) {
-      showToast(
-        '계가 오류: ' + (err instanceof Error ? err.message : String(err)),
-      )
-      setIsScoring(false)
-      if (err instanceof EngineError) {
-        setEngineError(err)
-      }
-    }
-  }, [canScore, gameState.gameTree, getAnalysisSettings, signMap, showToast])
-
-  const handleToggleDead = useCallback(
-    (vertex: Vertex) => {
-      if (!isScoring || scoringResult === null) return
-      const key = `${vertex[0]},${vertex[1]}`
-      const currentSign = signMap[vertex[1]]?.[vertex[0]]
-      if (currentSign === 0) return
-
-      setManualOverrides((prev: globalThis.Map<string, 'dead' | 'alive'>) => {
-        const next = new globalThis.Map(prev)
-        const current = next.get(key)
-        const engineDead = scoringResult.dead.some(
-          (v) => v[0] === vertex[0] && v[1] === vertex[1],
-        )
-        if (current === 'dead') {
-          next.set(key, 'alive')
-        } else if (current === 'alive') {
-          next.delete(key)
-        } else {
-          next.set(key, engineDead ? 'alive' : 'dead')
-        }
-        return next
-      })
-    },
-    [isScoring, scoringResult, signMap],
-  )
-
-  useEffect(() => {
-    if (scoringResult === null) return
-    const effective = effectiveDeadStones
-    const score = computeScore(signMap, effective, scoringResult.komi)
-    setComputedScore(score)
-  }, [effectiveDeadStones, scoringResult, signMap])
-
-  const handleAcceptScore = useCallback(() => {
-    setIsScoring(false)
-    setScoringResult(null)
-    setManualOverrides(new Map())
-    setComputedScore(null)
-  }, [])
-
-  const handleCancelScore = useCallback(() => {
-    setIsScoring(false)
-    setScoringResult(null)
-    setManualOverrides(new Map())
-    setComputedScore(null)
-  }, [])
+  // --- Render --------------------------------------------------------------------
 
   return (
     <BoardThemeProvider>
-      <ThemeSync theme={themeName} />
       <div
         id="app-root"
-        style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        minHeight: '100svh',
-        padding: '1rem',
-        gap: '1rem',
-      }}
-    >
-      <ControlBar
-        gameState={gameState}
-        boardSize={boardSize}
-        onBoardSizeChange={setBoardSize}
-        onNewGame={handleNewGame}
-        onPass={handlePass}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onSaveSGF={handleSaveSGF}
-        onFileChange={handleFileChange}
-        showCoordinates={showCoordinates}
-        onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}
-        themeName={themeName}
-        onThemeChange={setThemeName}
-        soundEnabled={soundEnabled}
-        onToggleSound={handleToggleSound}
-        gameMode={gameMode}
-        onGameModeChange={handleGameModeChange}
-        isAiThinking={isAiThinking}
-        onAiMove={handleAiMove}
-        showOwnership={showOwnership}
-        hasOwnership={ownership !== null}
-        onToggleOwnership={() => setShowOwnership((prev) => !prev)}
-        onScore={handleScore}
-        canScore={canScore}
-        isScoring={isScoring}
-        analysisEnabled={analysisEnabled}
-        onToggleAnalysis={() => setAnalysisEnabled((prev) => !prev)}
-      />
-      <EngineSettings
-        settings={engineSettings}
-        onChange={setEngineSettings}
-        humanModelAvailable={humanModelAvailable}
-      />
-      <Board
-        signMap={signMap}
-        boardSize={boardSize}
-        markerMap={combinedMarkerMap}
-        onVertexClick={handleVertexClick}
-        flashTrigger={flashTrigger}
-        showCoordinates={showCoordinates}
-        themeName={themeName}
-        currentPlayer={gameState.currentPlayer}
-        aiGhostVertex={aiGhostVertex}
-        aiFlashVertex={aiFlashVertex}
-        ownership={ownership}
-        showOwnership={showOwnership}
-        candidateMoves={candidateVertices}
-        dimmedVertices={isScoring ? effectiveDeadStones : undefined}
-      />
-      <AnalysisPanel
-        analysis={winrateAnalysis}
-        loading={winrateLoading}
-        error={winrateError}
-        engineEnabled={engineSettings.enabled}
-      />
-      {gameMode === 'selfplay' && (
-        <CandidateMoves
-          candidates={candidates}
-          onSelectMove={handleSelectCandidate}
-          disabled={isAiThinking}
-        />
-      )}
-      {computedScore !== null && (
-        <ScoringModal
-          score={computedScore}
-          onAccept={handleAcceptScore}
-          onCancel={handleCancelScore}
-        />
-      )}
-      {/* Toast notification */}
-      {toast !== null && (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: '#2a2a4e',
-            color: '#e0e0e0',
-            padding: '12px 24px',
-            borderRadius: '8px',
-            fontSize: '14px',
-            zIndex: 1000,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            border: '1px solid #3b3b5c',
-          }}
-        >
-          {toast}
-        </div>
-      )}
+        className={zenMode ? 'zen-mode' : undefined}
+      >
+        {!zenMode && (
+          <TopBar
+            gameMode={gameMode}
+            onGameModeChange={handleGameModeChange}
+            soundEnabled={soundEnabled}
+            onToggleSound={handleToggleSound}
+            onToggleZen={() => setZenMode(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
 
-      {engineError !== null && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000,
-          }}
-        >
-          <div
-            style={{
-              background: '#1e1e2e',
-              color: '#e0e0e0',
-              padding: '24px',
-              borderRadius: '12px',
-              maxWidth: '400px',
-              width: '90%',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-              border: '1px solid #3b3b5c',
-            }}
+        {zenMode && (
+          <button
+            type="button"
+            id="zen-exit"
+            onClick={() => setZenMode(false)}
+            aria-label="집중 모드 끄기"
+            title="집중 모드 끄기"
           >
-            <h3 style={{ margin: '0 0 12px', fontSize: '18px' }}>
-              엔진 오류
-            </h3>
-            <p style={{ margin: '0 0 20px', fontSize: '14px', lineHeight: 1.5 }}>
-              {engineError.code === 'ENGINE_OFFLINE'
-                ? '엔진 연결 실패'
-                : engineError.code === 'TIMEOUT'
-                  ? '엔진 응답 시간 초과'
-                  : '엔진 응답 오류'}
-              <br />
-              <span style={{ color: '#a0a0a0', fontSize: '12px' }}>
-                {engineError.message}
-              </span>
-            </p>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEngineError(null)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid #3b3b5c',
-                  background: 'transparent',
-                  color: '#e0e0e0',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                }}
-              >
-                닫기
-              </button>
-              <button
-                onClick={handleRestartEngine}
-                disabled={isRestarting}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: '#4a9eff',
-                  color: '#fff',
-                  cursor: isRestarting ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
-                  opacity: isRestarting ? 0.6 : 1,
-                }}
-              >
-                {isRestarting ? '재시작 중...' : '재시작'}
-              </button>
-            </div>
+            ✕
+          </button>
+        )}
+
+        <div className="game-layout">
+          <div className="board-col">
+            <Board
+              signMap={signMap}
+              boardSize={boardSize}
+              markerMap={combinedMarkerMap}
+              onVertexClick={handleVertexClick}
+              flashTrigger={flashTrigger}
+              showCoordinates={showCoordinates}
+              currentPlayer={gameState.currentPlayer}
+              aiGhostVertex={aiGhostVertex}
+              aiFlashVertex={aiFlashVertex}
+              ownership={ownership}
+              showOwnership={showOwnership}
+              candidateMoves={candidateVertices}
+              dimmedVertices={isScoring ? effectiveDeadStones : undefined}
+            />
+            {!zenMode && (
+              <PlaybackBar
+                gameState={gameState}
+                moveVersion={moveVersion}
+                onFirst={() => navigate(() => gameState.jumpToStart())}
+                onPrev={() => navigate(() => gameState.undo())}
+                onNext={() => navigate(() => gameState.redo())}
+                onLast={() => navigate(() => gameState.jumpToEnd())}
+              />
+            )}
           </div>
+
+          {!zenMode && (
+            <GameSidebar
+              gameState={gameState}
+              moveVersion={moveVersion}
+              gameMode={gameMode}
+              isAiThinking={isAiThinking}
+              onAiMove={handleAiMove}
+              onPass={handlePass}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onNewGameRequest={() => setNewGameOpen(true)}
+              canScore={canScore}
+              isScoring={isScoring}
+              onScore={handleScore}
+              onSaveSGF={handleSaveSGF}
+              onFileChange={handleFileChange}
+              showOwnership={showOwnership}
+              hasOwnership={ownership !== null}
+              onToggleOwnership={() => setShowOwnership((prev) => !prev)}
+              analysisEnabled={analysisEnabled}
+              onToggleAnalysis={() => setAnalysisEnabled((prev) => !prev)}
+              analysis={winrateAnalysis}
+              analysisLoading={winrateLoading}
+              analysisError={winrateError}
+              engineEnabled={engineSettings.enabled}
+              candidates={candidates}
+              onSelectCandidate={handleSelectCandidate}
+            />
+          )}
         </div>
-      )}
-    </div>
+
+        <SettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          engineSettings={engineSettings}
+          onEngineSettingsChange={setEngineSettings}
+          humanModelAvailable={humanModelAvailable}
+          showCoordinates={showCoordinates}
+          onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}
+        />
+
+        <NewGameModal
+          open={newGameOpen}
+          onClose={() => setNewGameOpen(false)}
+          boardSize={boardSize}
+          gameMode={gameMode}
+          engineEnabled={engineSettings.enabled}
+          difficulty={engineSettings.difficulty}
+          playStyle={engineSettings.playStyle}
+          onStart={handleStartNewGame}
+        />
+
+        {computedScore !== null && (
+          <ScoringModal
+            score={computedScore}
+            onAccept={handleAcceptScore}
+            onCancel={handleCancelScore}
+          />
+        )}
+
+        {toast !== null && <Toast message={toast} />}
+
+        {engineError !== null && (
+          <EngineErrorModal
+            error={engineError}
+            isRestarting={isRestarting}
+            onRestart={handleRestartEngine}
+            onDismiss={() => setEngineError(null)}
+          />
+        )}
+      </div>
     </BoardThemeProvider>
   )
 }
