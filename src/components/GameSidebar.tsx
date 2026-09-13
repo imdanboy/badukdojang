@@ -31,10 +31,7 @@ export interface GameSidebarProps {
   onSaveSGF: () => void
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   showOwnership: boolean
-  hasOwnership: boolean
   onToggleOwnership: () => void
-  analysisEnabled: boolean
-  onToggleAnalysis: () => void
   analysis: AnalyzeResponse | null
   analysisLoading: boolean
   analysisError: string | null
@@ -153,10 +150,7 @@ export function GameSidebar({
   onSaveSGF,
   onFileChange,
   showOwnership,
-  hasOwnership,
   onToggleOwnership,
-  analysisEnabled,
-  onToggleAnalysis,
   analysis,
   analysisLoading,
   analysisError,
@@ -276,7 +270,9 @@ export function GameSidebar({
         />
       </div>
 
-      {/* Analysis section */}
+      {/* Analysis section — on-demand: the Ownership toggle gates ALL engine
+          analysis (winrate, scoreLead, ownership overlay). While off, zero
+          engine requests are made so compute stays with gameplay. */}
       <div
         style={{
           display: 'flex',
@@ -286,25 +282,17 @@ export function GameSidebar({
       >
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button
-            id="analysis-toggle"
-            onClick={onToggleAnalysis}
-            title={analysisEnabled ? 'Analysis on' : 'Analysis off'}
-            style={smallBtnStyle(analysisEnabled, false)}
-          >
-            Analysis
-          </button>
-          <button
             id="ownership-toggle"
             onClick={onToggleOwnership}
-            disabled={!hasOwnership}
+            disabled={!engineEnabled}
             title={
-              hasOwnership
+              engineEnabled
                 ? showOwnership
-                  ? 'Ownership heatmap on'
-                  : 'Ownership heatmap off'
-                : 'No analysis data yet'
+                  ? '형세판단 끔 (엔진 분석 중지)'
+                  : '형세판단: 현재 국면 엔진 분석 시작'
+                : '엔진이 꺼져 있습니다'
             }
-            style={smallBtnStyle(showOwnership, !hasOwnership)}
+            style={smallBtnStyle(showOwnership, !engineEnabled)}
           >
             Ownership
           </button>

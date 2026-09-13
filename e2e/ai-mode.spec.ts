@@ -505,7 +505,7 @@ test.describe('AI Mode E2E', () => {
     })
   })
 
-  test('(k) ownership heatmap overlay toggles on and shows colored tints', async ({ page }) => {
+  test('(k) ownership overlay toggles on and shows nested-square confidence marks', async ({ page }) => {
     // Ownership gradient: top-left → Black (positive), bottom-right → White (negative).
     const boardSize = 19
     const ownership = new Array<number>(boardSize * boardSize)
@@ -540,18 +540,16 @@ test.describe('AI Mode E2E', () => {
     await page.waitForTimeout(200)
     await clickVertex(page, 3, 3, boardSize)
 
-    // The Ownership button is disabled until analysis returns ownership data.
-    await expect(async () => {
-      const btn = page.locator('#ownership-toggle')
-      await expect(btn).toBeEnabled()
-    }).toPass({ timeout: 10000 })
+    // The Ownership button is enabled once the engine is on (analysis is
+    // on-demand now) but shows no marks until the user toggles it.
+    await expect(page.locator('#ownership-toggle')).toBeEnabled()
+    await expect(page.locator('.ownership-mark')).toHaveCount(0)
 
-    await expect(page.locator('.shudan-paint')).toHaveCount(0)
-
+    // Toggling Ownership triggers the analysis fetch for the current position.
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(200)
 
-    const overlay = page.locator('.shudan-paint')
+    const overlay = page.locator('.ownership-mark')
     await expect(async () => {
       const count = await overlay.count()
       expect(count).toBeGreaterThan(0)
@@ -559,7 +557,7 @@ test.describe('AI Mode E2E', () => {
 
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(200)
-    await expect(page.locator('.shudan-paint')).toHaveCount(0)
+    await expect(page.locator('.ownership-mark')).toHaveCount(0)
 
     await page.locator('#ownership-toggle').click()
     await page.waitForTimeout(300)
@@ -597,8 +595,11 @@ test.describe('AI Mode E2E', () => {
     const panel = page.locator('#analysis-panel')
     await expect(panel).toHaveAttribute('data-state', 'idle')
 
-    // Place a stone in self-play mode (winrate fetch fires on any move).
+    // Place a stone in self-play mode.
     await clickVertex(page, 3, 3, 19)
+
+    // Analysis is on-demand: toggle Ownership to trigger the fetch.
+    await page.locator('#ownership-toggle').click()
 
     // Winrate label should show "53.2%" within 5 seconds.
     await expect(page.locator('#winrate-label')).toContainText('53.2%', { timeout: 5000 })
@@ -638,8 +639,9 @@ test.describe('AI Mode E2E', () => {
     await enableEngine(page)
     await page.waitForTimeout(200)
 
-    // Place a stone to trigger the analysis fetch.
+    // Place a stone, then toggle Ownership to trigger the analysis fetch.
     await clickVertex(page, 3, 3, 19)
+    await page.locator('#ownership-toggle').click()
 
     // Score lead text should show "흑 +5.3" within 5 seconds.
     await expect(page.locator('#score-lead')).toHaveText('집 차이: 흑 +5.3', {

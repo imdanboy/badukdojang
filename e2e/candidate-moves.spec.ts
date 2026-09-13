@@ -85,6 +85,9 @@ test.describe('Candidate Moves E2E', () => {
     // Play a move in self-play mode (default)
     await clickVertex(page, 3, 3, 19)
 
+    // Analysis is on-demand: toggle Ownership to trigger the analysis fetch.
+    await page.locator('#ownership-toggle').click()
+
     // Wait for candidate markers to appear (letter labels on the board)
     await expect(async () => {
       const labels = page.locator('.shudan-vertex .shudan-marker-label')
@@ -105,6 +108,7 @@ test.describe('Candidate Moves E2E', () => {
     await page.waitForTimeout(200)
 
     await clickVertex(page, 3, 3, 19)
+    await page.locator('#ownership-toggle').click()
 
     // Wait for the candidate moves panel to appear
     await expect(async () => {
@@ -147,6 +151,7 @@ test.describe('Candidate Moves E2E', () => {
 
     // Play first move at (3,3) = D4
     await clickVertex(page, 3, 3, 19)
+    await page.locator('#ownership-toggle').click()
 
     // Wait for candidates to appear
     await expect(async () => {
@@ -208,6 +213,7 @@ test.describe('Candidate Moves E2E', () => {
     await page.waitForTimeout(200)
 
     await clickVertex(page, 3, 3, 19)
+    await page.locator('#ownership-toggle').click()
 
     // Wait for candidates
     await expect(async () => {

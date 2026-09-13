@@ -59,7 +59,6 @@ export function App() {
   const [showCoordinates, setShowCoordinates] = useState(true)
   const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled())
   const [showOwnership, setShowOwnership] = useState(false)
-  const [analysisEnabled, setAnalysisEnabled] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
@@ -102,7 +101,7 @@ export function App() {
     ownership,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
-    analysisEnabled,
+    enabled: showOwnership,
     signMap,
     gameState,
     getLightAnalysisSettings,
@@ -588,10 +587,7 @@ export function App() {
               onSaveSGF={handleSaveSGF}
               onFileChange={handleFileChange}
               showOwnership={showOwnership}
-              hasOwnership={ownership !== null}
               onToggleOwnership={() => setShowOwnership((prev) => !prev)}
-              analysisEnabled={analysisEnabled}
-              onToggleAnalysis={() => setAnalysisEnabled((prev) => !prev)}
               analysis={winrateAnalysis}
               analysisLoading={winrateLoading}
               analysisError={winrateError}
