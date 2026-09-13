@@ -3,6 +3,18 @@
 A React 19 SPA for studying Go (baduk), with an optional KataGo AI engine
 integration served by a Bun bridge process during local development.
 
+## Quick start (already set up once)
+
+If `config/engine.json` and `~/katago-models/` already exist on this
+machine (first-time setup below), running the app is one command:
+
+```bash
+bun run start
+```
+
+This starts the KataGo bridge first and opens the Vite dev server once
+the engine is ready. Detailed usage: [docs/wiki/setup-and-usage.md](docs/wiki/setup-and-usage.md).
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) (used to run both the Vite dev server and the
@@ -57,25 +69,38 @@ curl -L -o ~/katago-models/b18c384nbt-humanv0.bin.gz \
   https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz
 ```
 
-## Environment variables
+## Engine config (`config/engine.json`)
 
-Export these before running `start:engine` so the bridge can find the
-models and its config:
+The bridge reads machine-specific values (binary, model paths, port)
+from `config/engine.json`, not from environment variables:
 
 ```bash
-export KATAGO_MODEL_PATH="$HOME/katago-models/kata1-b18c384nbt.bin.gz"
-export HUMAN_MODEL_PATH="$HOME/katago-models/b18c384nbt-humanv0.bin.gz"
-# Optional — override the defaults if your install layout differs:
-# export KATAGO_BINARY=katago
-# export KATAGO_CONFIG_PATH=/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg
-# export PORT=8787
+cp config/engine.example.json config/engine.json
 ```
+
+```json
+{
+  "katagoBinary": "katago",
+  "katagoConfigPath": "/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/gtp_example.cfg",
+  "modelPath": "~/katago-models/kata1-b18c384nbt.bin.gz",
+  "humanModelPath": "~/katago-models/b18c384nbt-humanv0.bin.gz",
+  "analysisConfigPath": null,
+  "port": 8787
+}
+```
+
+`~` is expanded to `$HOME`. Environment variables
+(`KATAGO_MODEL_PATH`, `HUMAN_MODEL_PATH`, `KATAGO_BINARY`,
+`KATAGO_CONFIG_PATH`, `KATAGO_ANALYSIS_CONFIG_PATH`, `PORT`) still
+override the file, which is useful for tests.
+
+`config/engine.json` is gitignored because it contains absolute paths;
+the template is `config/engine.example.json`.
 
 ## Local development (two terminals)
 
-The frontend and the KataGo bridge are separate processes. Run them
-side by side; the Vite dev server proxies `/api/gtp/*` to the bridge on
-`http://localhost:8787`.
+The frontend and the KataGo bridge are separate processes. `bun run
+start` runs both (bridge first, then Vite). To run them manually:
 
 ```bash
 # Terminal 1 — KataGo bridge
@@ -119,6 +144,7 @@ runtime-configured public URL) instead of relying on Vite's dev server.
 | Script | What it does |
 | --- | --- |
 | `bun run setup` | One-time clone/build/link of the Kaya submodule and install dependencies |
+| `bun run start` | Start the KataGo bridge, then the Vite dev server once it is ready |
 | `bun run dev` | Vite dev server with the `/api/gtp` proxy to the bridge |
 | `bun run start:engine` | Run the Bun GTP bridge against a local KataGo binary |
 | `bun run build` | Type-check and produce a static `dist/` (no proxy, no backend URL baked in) |
