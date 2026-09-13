@@ -3,7 +3,7 @@ title: badukdojang 위키
 description: 프로젝트 위키 진입점 (MOC). 바로가기(현행)와 archive(과거/완료)로 라우팅.
 tags: [moc, index]
 created: 2026-07-16
-updated: 2026-08-09 (노트 분류 기준을 용도/빈도로 변경, archive 섹션 신설)
+updated: 2026-09-13 (Wiki 첫 레퍼런스 — katago-difficulty-knobs 추가)
 ---
 
 # badukdojang 위키
@@ -31,7 +31,7 @@ LLM 이 어떤 노트를 읽을지 토큰을 거의 안 쓰고 결정할 수 있
 - [katago-engines](wiki/katago-engines.md) — KataGo 기능/모델/튜닝 + 약 엔진(Pachi/GNU Go) 비교, 설정 패널·디버깅 체크리스트
 
 ## Wiki
-_(현재 영속 레퍼런스 없음. 새 레퍼런스는 `docs/wiki/`로 승격)_
+- [katago-difficulty-knobs](wiki/katago-difficulty-knobs.md) — KataGo 난이도/강도 파라미터 전체 사전 — 탐색 예산·Human-SL·탐색 왜곡·온도 4층위로 정리
 
 ## Archive — 과거/완료 기록
 - [baduk-mvp](archive/baduk-mvp.md) — 2026-07-05 MVP 완성 노트. @sabaki/Preact 시절. 실행법은 setup-and-usage로 이전됨
