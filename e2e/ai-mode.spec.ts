@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { enableEngine } from './helpers.ts'
 
 function vertexIndex(x: number, y: number, boardSize: number): number {
   return y * boardSize + x
@@ -72,7 +73,7 @@ test.describe('AI Mode E2E', () => {
     page,
   }) => {
     // Enable the engine before entering AI mode
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Toggle to AI mode
@@ -150,7 +151,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -174,7 +175,7 @@ test.describe('AI Mode E2E', () => {
     page,
   }) => {
     // Enable the engine before entering AI mode
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Start in self-play, place a stone
@@ -200,7 +201,7 @@ test.describe('AI Mode E2E', () => {
 
   test('(e) confirming mode switch resets the game', async ({ page }) => {
     // Enable the engine before entering AI mode
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Place a stone
@@ -228,7 +229,7 @@ test.describe('AI Mode E2E', () => {
   })
 
   test('(f) AI Move button manually triggers engine move', async ({ page }) => {
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -289,7 +290,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -336,7 +337,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -382,7 +383,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -432,7 +433,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForSelector('.shudan-goban')
 
     // Enable engine so the engine-off toast doesn't appear
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -481,7 +482,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -532,7 +533,7 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
@@ -589,7 +590,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForSelector('.shudan-goban')
 
     // Enable the engine so the winrate panel is active.
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Panel should be in idle state before any move.
@@ -634,7 +635,7 @@ test.describe('AI Mode E2E', () => {
     await page.waitForSelector('.shudan-goban')
 
     // Enable the engine so the analysis panel is active.
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Place a stone to trigger the analysis fetch.
@@ -704,11 +705,17 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    // Enable the engine via localStorage + reload (avoids racing the
+    // engine-error modal against the settings modal overlay).
+    await page.evaluate(
+      (key) => localStorage.setItem(key, JSON.stringify({ enabled: true })),
+      ENGINE_SETTINGS_KEY,
+    )
+    await page.reload()
     await page.waitForTimeout(500)
 
     const modal = page.locator('role=dialog')
-    await expect(modal).toBeVisible()
+    await expect(modal).toBeVisible({ timeout: 10000 })
     await expect(modal).toContainText('엔진 오류')
     await expect(modal).toContainText('엔진 연결 실패')
 
@@ -799,7 +806,13 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    await page.locator('#engine-toggle').click()
+    // Enable the engine via localStorage + reload (avoids racing the
+    // engine-error modal against the settings modal overlay).
+    await page.evaluate(
+      (key) => localStorage.setItem(key, JSON.stringify({ enabled: true })),
+      ENGINE_SETTINGS_KEY,
+    )
+    await page.reload()
     await page.waitForTimeout(500)
 
     const modal = page.locator('role=dialog')

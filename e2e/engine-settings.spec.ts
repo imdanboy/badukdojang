@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { openSettings } from './helpers.ts'
 
 const STORAGE_KEY = 'badukdojang-engine-settings'
 
@@ -37,9 +38,12 @@ test.describe('EngineSettings E2E', () => {
     })
 
     await page.goto('/')
+    // Engine settings live inside the settings modal (engine tab is default).
+    await openSettings(page)
     await page.waitForSelector('#engine-settings-panel')
     await page.evaluate((key) => localStorage.removeItem(key), STORAGE_KEY)
     await page.reload()
+    await openSettings(page)
     await page.waitForSelector('#engine-settings-panel')
   })
 
@@ -213,7 +217,7 @@ test.describe('EngineSettings E2E', () => {
 
     // Reload page
     await page.reload()
-    await page.waitForSelector('#engine-settings-panel')
+    await openSettings(page)
     await page.waitForTimeout(300)
 
     // Verify values restored from localStorage
@@ -234,8 +238,7 @@ test.describe('EngineSettings E2E', () => {
     await screenshot(page, 'after-reload')
   })
 
-  test('(j) slider bounds — cannot set negative time or 0 kyu', async ({
-    page,
+  test('(j) slider bounds — cannot set negative time or 0 kyu', async ({    page,
   }) => {
     await page.locator('#engine-toggle').click()
     await page.waitForTimeout(200)
@@ -265,26 +268,5 @@ test.describe('EngineSettings E2E', () => {
     expect(stored2['difficulty']).toBe(1)
 
     await screenshot(page, 'bounds-clamped')
-  })
-
-  test('(k) header click collapses and expands panel', async ({ page }) => {
-    // Body should be visible initially
-    await expect(page.locator('#engine-settings-body')).toBeVisible()
-
-    // Click header to collapse
-    await page.locator('#engine-settings-header').click()
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('#engine-settings-body')).toHaveCount(0)
-
-    await screenshot(page, 'collapsed')
-
-    // Click again to expand
-    await page.locator('#engine-settings-header').click()
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('#engine-settings-body')).toBeVisible()
-
-    await screenshot(page, 'expanded')
   })
 })

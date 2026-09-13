@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { startNewGame } from './helpers.ts'
 
 function vertexIndex(x: number, y: number, boardSize: number): number {
   return y * boardSize + x
@@ -49,8 +50,11 @@ test.describe('Board E2E', () => {
   })
 
   test('(b) change board size to 13 renders 13x13 grid', async ({ page }) => {
+    // Board size lives in the new-game modal now.
+    await page.locator('button:has-text("New Game")').click()
     const select = page.locator('#board-size-select')
     await select.selectOption('13')
+    await page.locator('#new-game-start').click()
 
     await page.waitForTimeout(200)
 
@@ -180,13 +184,20 @@ test.describe('Board E2E', () => {
     await expect(coordX).toHaveCount(2)
     await expect(coordY).toHaveCount(2)
 
+    // Coordinates toggle lives in the settings modal (board tab).
+    await page.locator('#settings-button').click()
+    await page.locator('#settings-tab-board').click()
     await page.locator('label:has-text("Coordinates") input[type="checkbox"]').click()
+    await page.locator('#settings-close').click()
     await page.waitForTimeout(200)
 
     await expect(coordX).toHaveCount(0)
     await expect(coordY).toHaveCount(0)
 
+    await page.locator('#settings-button').click()
+    await page.locator('#settings-tab-board').click()
     await page.locator('label:has-text("Coordinates") input[type="checkbox"]').click()
+    await page.locator('#settings-close').click()
     await page.waitForTimeout(200)
 
     await expect(coordX).toHaveCount(2)
@@ -240,8 +251,8 @@ test.describe('Board E2E', () => {
     ])
     expect(download.suggestedFilename()).toContain('.sgf')
 
-    // New game to clear board
-    await page.locator('button:has-text("New Game")').click()
+    // New game to clear board (size/mode confirmed through the modal)
+    await startNewGame(page)
     await page.waitForTimeout(200)
 
     stones = page.locator('.shudan-stone')

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { enableEngine } from './helpers.ts'
 
 function vertexIndex(x: number, y: number, boardSize: number): number {
   return y * boardSize + x
@@ -78,7 +79,7 @@ test.describe('Candidate Moves E2E', () => {
     page,
   }) => {
     // Enable the engine so analysis runs
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Play a move in self-play mode (default)
@@ -100,7 +101,7 @@ test.describe('Candidate Moves E2E', () => {
   test('(b) sidebar shows 3 candidate rows with vertex, winrate, scoreLead, PV', async ({
     page,
   }) => {
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await clickVertex(page, 3, 3, 19)
@@ -141,7 +142,7 @@ test.describe('Candidate Moves E2E', () => {
   test('(c) clicking a candidate row plays the move on the board', async ({
     page,
   }) => {
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Play first move at (3,3) = D4
@@ -186,7 +187,7 @@ test.describe('Candidate Moves E2E', () => {
   })
 
   test('(d) candidates are NOT shown in AI mode', async ({ page }) => {
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     // Switch to AI mode
@@ -203,7 +204,7 @@ test.describe('Candidate Moves E2E', () => {
   })
 
   test('evidence: full candidate moves screenshot', async ({ page }) => {
-    await page.locator('#engine-toggle').click()
+    await enableEngine(page)
     await page.waitForTimeout(200)
 
     await clickVertex(page, 3, 3, 19)

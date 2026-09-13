@@ -86,6 +86,13 @@ async function clickVertex(x: number, y: number, boardSize: number): Promise<voi
   fireEvent.click(vertex)
 }
 
+/** Engine controls live inside the settings modal — open, toggle, close. */
+function enableEngine(): void {
+  fireEvent.click(document.getElementById('settings-button')!)
+  fireEvent.click(document.getElementById('engine-toggle')!)
+  fireEvent.click(document.getElementById('settings-close')!)
+}
+
 describe('App', () => {
   let requestMoveMock: ReturnType<typeof vi.fn>
   let requestAnalysisMock: ReturnType<typeof vi.fn>
@@ -128,7 +135,7 @@ describe('App', () => {
   test('AI mode: human move triggers engine response', async () => {
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
 
     // Switch to AI mode
     fireEvent.click(screen.getByText('AI 대국'))
@@ -160,7 +167,7 @@ describe('App', () => {
 
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
     fireEvent.click(screen.getByText('AI 대국'))
     await clickVertex(3, 3, 19)
 
@@ -197,7 +204,7 @@ describe('App', () => {
 
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
     fireEvent.click(screen.getByText('AI 대국'))
 
     // Click two different vertices rapidly
@@ -261,7 +268,7 @@ describe('App', () => {
   test('AI Move button manually triggers engine move', async () => {
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
     fireEvent.click(screen.getByText('AI 대국'))
 
     // Place human move
@@ -287,7 +294,7 @@ describe('App', () => {
 
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
     fireEvent.click(screen.getByText('AI 대국'))
     await clickVertex(3, 3, 19)
 
@@ -307,7 +314,7 @@ describe('App', () => {
 
     render(<App />)
 
-    fireEvent.click(document.getElementById('engine-toggle')!)
+    enableEngine()
     fireEvent.click(screen.getByText('AI 대국'))
 
     // Human plays at (3,3)
