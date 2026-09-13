@@ -53,8 +53,13 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
   }, [engineSettings, boardSize])
 
   const ANALYSIS_TIMEOUT = 15000
-  const LIGHT_MAX_VISITS = 5
-  const LIGHT_MAX_TIME = 1
+  // Lightweight but *clean* analysis: enough visits for stable ownership
+  // (5 visits produces noisy, policy-only influence maps) and NO difficulty
+  // overrides (wideRootNoise / playoutDoublingAdvantage / humanSLProfile) —
+  // winrate and ownership must reflect pure strong-KataGo judgment,
+  // independent of the game difficulty the user is playing at.
+  const LIGHT_MAX_VISITS = 80
+  const LIGHT_MAX_TIME = 2
   const getLightAnalysisSettings = useCallback((): EngineEngineSettings => {
     return {
       maxTime: LIGHT_MAX_TIME,
@@ -62,17 +67,9 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
       numSearchThreads: 2,
       rules: engineSettings.rules,
       komi: engineSettings.rules === 'chinese' ? 7.5 : 6.5,
-      humanSLProfile: engineSettings.humanSLProfile,
-      chosenMoveTemperature: engineSettings.chosenMoveTemperature,
-      wideRootNoise: engineSettings.wideRootNoise,
-      playoutDoublingAdvantage: engineSettings.playoutDoublingAdvantage,
-      humanSLChosenMoveProp: engineSettings.humanSLChosenMoveProp,
-      humanMoveMode: engineSettings.humanMoveMode,
       boardSize,
-      difficulty: engineSettings.difficulty,
-      playStyle: engineSettings.playStyle,
     }
-  }, [engineSettings, boardSize])
+  }, [engineSettings.rules, boardSize])
 
   const handleRestartEngine = useCallback(async () => {
     if (isRestarting) return
