@@ -51,6 +51,7 @@ export interface AnalyzeResponse {
   readonly winrate: number;
   readonly scoreLead: number;
   readonly ownership?: number[] | undefined;
+  readonly policy?: number[] | undefined;
   readonly bestMoves?: BestMoveInfo[] | undefined;
   readonly completed: boolean;
 }

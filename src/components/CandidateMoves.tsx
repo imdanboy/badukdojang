@@ -14,6 +14,8 @@ export interface CandidateMove {
   readonly vertex: Vertex | 'pass'
   /** Winrate fraction 0-1 from current player's perspective. */
   readonly winrate: number
+  /** KataGo search visits for this move. */
+  readonly visits: number
   /** Score lead in points (positive = current player ahead). */
   readonly scoreLead: number
   /** Principal variation move list (GTP vertex strings, e.g. "D5"). */

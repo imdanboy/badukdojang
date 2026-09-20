@@ -100,5 +100,6 @@ export function useAnalysis({
     winrateLoading,
     winrateError,
     ownership,
+    policy: winrateAnalysis?.policy ?? null,
   }
 }

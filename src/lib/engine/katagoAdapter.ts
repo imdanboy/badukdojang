@@ -323,6 +323,7 @@ export async function requestAnalysis(
   }
 
   body.includeOwnership = true
+  body.includePolicy = true
 
   return await postJSON<AnalyzeResponse>(`${API_BASE}/analyze`, body, timeoutMs, signal)
 }
@@ -510,5 +511,4 @@ export async function requestMovePolicyWeighted(
   const difficulty = settings.difficulty ?? 10
   return pickMoveFromPolicy(analysis.policy, boardSize, difficulty, occupied)
 }
-
 

@@ -32,6 +32,8 @@ export interface GameSidebarProps {
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   showWinrate: boolean
   onToggleWinrate: () => void
+  showPolicy: boolean
+  onTogglePolicy: () => void
   showOwnership: boolean
   onToggleOwnership: () => void
   showCandidates: boolean
@@ -155,6 +157,8 @@ export function GameSidebar({
   onFileChange,
   showWinrate,
   onToggleWinrate,
+  showPolicy,
+  onTogglePolicy,
   showOwnership,
   onToggleOwnership,
   showCandidates,
@@ -303,6 +307,21 @@ export function GameSidebar({
             style={smallBtnStyle(showWinrate, !engineEnabled)}
           >
             승률
+          </button>
+          <button
+            id="policy-toggle"
+            onClick={onTogglePolicy}
+            disabled={!engineEnabled}
+            title={
+              engineEnabled
+                ? showPolicy
+                  ? '정책망 확률 표시 끔'
+                  : '정책망 확률 표시: 현재 국면 엔진 분석 시작'
+                : '엔진이 꺼져 있습니다'
+            }
+            style={smallBtnStyle(showPolicy, !engineEnabled)}
+          >
+            정책망
           </button>
           {gameMode === 'selfplay' && (
             <button

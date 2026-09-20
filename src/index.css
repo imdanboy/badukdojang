@@ -160,6 +160,45 @@ body {
   fill: rgba(255, 255, 255, 0.9);
 }
 
+.policy-probability {
+  fill: #fff;
+  font-size: 0.22px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.8);
+  stroke-width: 0.045px;
+  pointer-events: none;
+}
+
+.policy-probability-circle {
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 0.035px;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.candidate-info-circle {
+  fill: hsl(130 65% 38%);
+  stroke: rgba(220, 255, 225, 0.9);
+  stroke-width: 0.045px;
+  pointer-events: none;
+}
+
+.candidate-info-circle-primary {
+  stroke: #3b82f6;
+  stroke-width: 0.085px;
+}
+
+.candidate-info {
+  fill: #fff;
+  font-size: 0.24px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.9);
+  stroke-width: 0.035px;
+  pointer-events: none;
+}
+
 .playback-bar {
   display: flex;
   align-items: center;

@@ -14,6 +14,7 @@ import { Goban } from '@kaya/shudan'
 import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
 import { useBoardTheme } from '@kaya/themes'
 import { ownershipMarks } from '../lib/ownership.ts'
+import { policyMarks } from '../lib/policy.ts'
 
 export interface BoardProps {
   signMap: SignMap
@@ -29,10 +30,20 @@ export interface BoardProps {
   ownership?: readonly number[] | null
   /** Toggle the ownership overlay on/off. */
   showOwnership?: boolean
-  /** Top-N candidate move vertices to render as letter markers (A, B, C...). */
-  candidateMoves?: Vertex[] | undefined
+  /** KataGo policy probabilities for empty vertices. */
+  policy?: readonly number[] | null
+  /** Toggle the policy probability overlay on/off. */
+  showPolicy?: boolean
+  /** Top-N candidate moves to render as score-lead/visit markers. */
+  candidateMoves?: CandidateMoveMarker[] | undefined
   /** Vertices to dim (e.g., dead stones in scoring mode). */
   dimmedVertices?: Vertex[] | undefined
+}
+
+export interface CandidateMoveMarker {
+  readonly vertex: Vertex
+  readonly scoreLead: number
+  readonly visits: number
 }
 
 /** Rect of the Goban's board-content area in wrapper coordinates. */
@@ -54,6 +65,8 @@ export function Board({
   aiFlashVertex = null,
   ownership = null,
   showOwnership = false,
+  policy = null,
+  showPolicy = false,
   candidateMoves = undefined,
   dimmedVertices = undefined,
 }: BoardProps) {
@@ -81,7 +94,7 @@ export function Board({
   // Goban DOM) instead of reconstructing Goban's coordinate padding
   // arithmetic — immune to any future padding changes in Shudan.
   useEffect(() => {
-    if (!showOwnership) {
+    if (!showOwnership && !showPolicy && (candidateMoves?.length ?? 0) === 0) {
       setContentRect(null)
       return
     }
@@ -105,7 +118,7 @@ export function Board({
     const observer = new ResizeObserver(update)
     observer.observe(contentEl)
     return () => observer.disconnect()
-  }, [showOwnership, containerWidth, boardSize])
+  }, [showOwnership, showPolicy, candidateMoves?.length, containerWidth, boardSize])
 
   useEffect(() => {
     if (flashTrigger === 0) return
@@ -138,26 +151,43 @@ export function Board({
     return null
   }, [aiGhostVertex])
 
-  // Ownership marks skip candidate-move vertices: the A/B/C letter markers
-  // are drawn there, and the nested-square overlay would stack on top and
-  // make the letters unreadable.
+  // Ownership marks skip candidate-move vertices: the numeric candidate
+  // marker is drawn there, and the overlays would stack on top of each other.
   const ownershipMarksList = useMemo(() => {
     if (!showOwnership || ownership === null) return null
     const occupiedByCandidates = new Set(
-      (candidateMoves ?? []).map((v) => `${v[0]}-${v[1]}`),
+      (candidateMoves ?? []).map((m) => `${m.vertex[0]}-${m.vertex[1]}`),
     )
     return ownershipMarks(ownership, signMap, boardSize).filter(
       (m) => !occupiedByCandidates.has(`${m.cx - 0.5}-${m.cy - 0.5}`),
     )
   }, [showOwnership, ownership, signMap, boardSize, candidateMoves])
 
-  // Merge the last-move markerMap (circle) with candidate letter markers
-  // (A, B, C). Candidates override the last-move circle at overlapping
-  // vertices since the letter is more informative for study/hint mode.
+  const policyMarksList = useMemo(() => {
+    if (!showPolicy || policy === null) return null
+    const candidateKeys = new Set(
+      (candidateMoves ?? []).map((m) => `${m.vertex[0]}-${m.vertex[1]}`),
+    )
+    return policyMarks(policy, signMap, boardSize).filter(
+      (m) => !candidateKeys.has(`${m.vertex[0]}-${m.vertex[1]}`),
+    )
+  }, [showPolicy, policy, signMap, boardSize, candidateMoves])
+
+  const policyRange = useMemo(() => {
+    if (policyMarksList === null || policyMarksList.length === 0) return null
+    let min = policyMarksList[0]!.probability
+    let max = min
+    for (const mark of policyMarksList) {
+      min = Math.min(min, mark.probability)
+      max = Math.max(max, mark.probability)
+    }
+    return { min, max }
+  }, [policyMarksList])
+
+  // Keep the last-move/scoring markers in Goban. Candidate details are drawn
+  // in the SVG overlay below so two numeric values fit on each move.
   const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
-    const hasCandidates =
-      candidateMoves !== undefined && candidateMoves.length > 0
-    if (markerMap === undefined && !hasCandidates) return undefined
+    if (markerMap === undefined) return undefined
 
     const map: BoardMap<Marker | null> = signMap.map((row) =>
       row.map(() => null),
@@ -172,19 +202,8 @@ export function Board({
         }
       }
     }
-    if (hasCandidates) {
-      const letters = ['A', 'B', 'C']
-      candidateMoves!.forEach((v, i) => {
-        if (i >= letters.length) return
-        const [cx, cy] = v
-        const row = map[cy]
-        if (row !== undefined && cx >= 0 && cx < row.length) {
-          row[cx] = { type: 'label', label: letters[i]! }
-        }
-      })
-    }
     return map
-  }, [markerMap, candidateMoves, signMap])
+  }, [markerMap, signMap])
 
   const heatMap = useMemo<BoardMap<HeatVertex> | undefined>(() => {
     if (candidateMoves === undefined || candidateMoves.length === 0) {
@@ -194,9 +213,9 @@ export function Board({
       row.map(() => null),
     )
     const strengths = [9, 6, 3]
-    candidateMoves.forEach((v, i) => {
+    candidateMoves.forEach((candidate, i) => {
       if (i >= strengths.length) return
-      const [cx, cy] = v
+      const [cx, cy] = candidate.vertex
       const row = map[cy]
       if (row !== undefined && cx >= 0 && cx < row.length) {
         row[cx] = { strength: strengths[i]! }
@@ -228,7 +247,7 @@ export function Board({
           {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
           {...(heatMap !== undefined ? { heatMap } : {})}
         />
-        {ownershipMarksList !== null && contentRect !== null && (
+        {(ownershipMarksList !== null || policyMarksList !== null || candidateMoves !== undefined) && contentRect !== null && (
           <svg
             className="ownership-overlay"
             viewBox={`0 0 ${boardSize} ${boardSize}`}
@@ -241,7 +260,71 @@ export function Board({
               pointerEvents: 'none',
             }}
           >
-            {ownershipMarksList.map((m) => {
+            {policyMarksList?.map((m) => {
+              const range = policyRange!
+              const normalized =
+                range.max === range.min
+                  ? 1
+                  : (m.probability - range.min) / (range.max - range.min)
+              // Red marks are low, yellow is the midpoint, and green is high.
+              // HSL hue interpolation keeps the whole range continuous.
+              const hue = normalized * 120
+              return (
+                <g key={`policy-${m.vertex[0]}-${m.vertex[1]}`}>
+                  <circle
+                    cx={m.cx}
+                    cy={m.cy}
+                    r="0.38"
+                    className="policy-probability-circle"
+                    style={{ fill: `hsl(${hue} 82% 48%)` }}
+                  />
+                  <text
+                    x={m.cx}
+                    y={m.cy}
+                    className="policy-probability"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {(m.probability * 100).toFixed(1)}
+                  </text>
+                </g>
+              )
+            })}
+            {candidateMoves?.map((candidate, index) => {
+              const [x, y] = candidate.vertex
+              const cx = x + 0.5
+              const cy = y + 0.5
+              const scoreLead = `${candidate.scoreLead >= 0 ? '+' : ''}${candidate.scoreLead.toFixed(1)}`
+              return (
+                <g key={`candidate-${x}-${y}`}>
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r="0.43"
+                    className={`candidate-info-circle${index === 0 ? ' candidate-info-circle-primary' : ''}`}
+                  />
+                  <text
+                    x={cx}
+                    y={cy - 0.11}
+                    className="candidate-info"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {scoreLead}
+                  </text>
+                  <text
+                    x={cx}
+                    y={cy + 0.15}
+                    className="candidate-info"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {candidate.visits}
+                  </text>
+                </g>
+              )
+            })}
+            {ownershipMarksList?.map((m) => {
               const half = m.size / 2
               const inner = m.size * 0.55
               return (

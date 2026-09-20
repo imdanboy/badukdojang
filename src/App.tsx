@@ -64,6 +64,7 @@ export function App() {
   const [showWinrate, setShowWinrate] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
   const [showOwnership, setShowOwnership] = useState(false)
+  const [showPolicy, setShowPolicy] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
@@ -102,12 +103,14 @@ export function App() {
   const analysisEnabled =
     showWinrate ||
     showOwnership ||
+    showPolicy ||
     (gameMode === 'selfplay' && showCandidates)
   const {
     winrateAnalysis,
     winrateLoading,
     winrateError,
     ownership,
+    policy,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
     enabled: analysisEnabled,
@@ -227,6 +230,7 @@ export function App() {
       if (parsed === 'resign') continue
       result.push({
         vertex: parsed,
+        visits: bm.visits,
         winrate: bm.winrate,
         scoreLead: bm.scoreLead,
         pv: bm.pv ?? [],
@@ -235,11 +239,15 @@ export function App() {
     return result
   }, [winrateAnalysis, gameMode, boardSize])
 
-  const candidateVertices = useMemo<Vertex[]>(
+  const candidateMarkers = useMemo(
     () =>
       candidates
-        .map((c) => (c.vertex === 'pass' ? null : c.vertex))
-        .filter((v): v is Vertex => v !== null),
+        .filter((c): c is CandidateMove & { vertex: Vertex } => c.vertex !== 'pass')
+        .map((c) => ({
+          vertex: c.vertex,
+          scoreLead: c.scoreLead,
+          visits: c.visits,
+        })),
     [candidates],
   )
 
@@ -564,7 +572,9 @@ export function App() {
               aiFlashVertex={aiFlashVertex}
               ownership={ownership}
               showOwnership={showOwnership}
-              candidateMoves={showCandidates ? candidateVertices : undefined}
+              policy={policy}
+              showPolicy={showPolicy}
+              candidateMoves={showCandidates ? candidateMarkers : undefined}
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
             />
             {!zenMode && (
@@ -597,6 +607,8 @@ export function App() {
               onFileChange={handleFileChange}
               showWinrate={showWinrate}
               onToggleWinrate={() => setShowWinrate((prev) => !prev)}
+              showPolicy={showPolicy}
+              onTogglePolicy={() => setShowPolicy((prev) => !prev)}
               showOwnership={showOwnership}
               onToggleOwnership={() => setShowOwnership((prev) => !prev)}
               showCandidates={showCandidates}
