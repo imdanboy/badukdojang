@@ -58,6 +58,11 @@ export function App() {
   // --- View state -----------------------------------------------------------
   const [showCoordinates, setShowCoordinates] = useState(true)
   const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled())
+  // Analysis display toggles — independent UI layers fed by ONE shared
+  // analysis response (rootInfo.winrate, moveInfos, ownership). Any of
+  // them being on gates the engine fetch (compute runs once).
+  const [showWinrate, setShowWinrate] = useState(false)
+  const [showCandidates, setShowCandidates] = useState(false)
   const [showOwnership, setShowOwnership] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
@@ -94,6 +99,10 @@ export function App() {
   } = useEngine({ boardSize, showToast })
 
   // --- Analysis polling -----------------------------------------------------
+  const analysisEnabled =
+    showWinrate ||
+    showOwnership ||
+    (gameMode === 'selfplay' && showCandidates)
   const {
     winrateAnalysis,
     winrateLoading,
@@ -101,7 +110,7 @@ export function App() {
     ownership,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
-    enabled: showOwnership,
+    enabled: analysisEnabled,
     signMap,
     gameState,
     getLightAnalysisSettings,
@@ -555,7 +564,7 @@ export function App() {
               aiFlashVertex={aiFlashVertex}
               ownership={ownership}
               showOwnership={showOwnership}
-              candidateMoves={candidateVertices}
+              candidateMoves={showCandidates ? candidateVertices : undefined}
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
             />
             {!zenMode && (
@@ -586,8 +595,12 @@ export function App() {
               onScore={handleScore}
               onSaveSGF={handleSaveSGF}
               onFileChange={handleFileChange}
+              showWinrate={showWinrate}
+              onToggleWinrate={() => setShowWinrate((prev) => !prev)}
               showOwnership={showOwnership}
               onToggleOwnership={() => setShowOwnership((prev) => !prev)}
+              showCandidates={showCandidates}
+              onToggleCandidates={() => setShowCandidates((prev) => !prev)}
               analysis={winrateAnalysis}
               analysisLoading={winrateLoading}
               analysisError={winrateError}

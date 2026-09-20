@@ -3,7 +3,7 @@ title: KataGo 난이도 노브 사전
 description: KataGo 엔진 강도/난이도 조절 파라미터 전체 목록 — 탐색 예산, Human-SL 모방, 탐색 왜곡, 수 선택 온도별 의미와 실험 포인트
 tags: [katago, difficulty, parameters, engine-tuning, reference]
 created: 2026-09-13
-updated: 2026-09-13
+updated: 2026-09-14 (분석 표시 3분리 결정 추가)
 ---
 
 # KataGo 난이도 노브 사전
@@ -168,6 +168,7 @@ v1.15.0+ 에서 지원. 인간 기보(장기 40만국+)로 학습한 별도 네�
 
 - **playStyle=strong**: maxVisits 800, 나머지 노브 전부 0 (순수 강한 KataGo).
 - **분석(Ownership 토글)**: 난이도와 무관하게 `maxVisits=80, maxTime=2` + 노이즈 노브 전부 없음 — 승률/집은 항상 순수 강한 KataGo 기준 (2026-09-13 결정).
+- **분석 표시 3분리 (2026-09-14 결정)**: 사이드바 토글을 승률/후보수/형세 3개 버튼으로 분리 (`GameSidebar.tsx` #winrate-toggle, #candidates-toggle, #ownership-toggle). 세 데이터가 전부 같은 분석 응답(rootInfo/moveInfos/ownership)에서 오므로 엔진 쿼리는 1회 공유 — 하나라도 켜면 fetch, 전부 끄면 중단 (KaTrain/OGS 방식). 분석 프로필(maxVisits 80 등)은 기존 결정 그대로 유지.
 
 ## 7. 실험 포인트 — 뭘 건드려볼 것인가
 

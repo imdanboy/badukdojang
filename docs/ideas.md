@@ -13,7 +13,7 @@ updated: 2026-08-09 (archive 정리 후 재작성 — 구 Inbox/할일/OOM/OMO �
 3가지 방향으로 각각 파보고 싶어
 1. 화려한 UI/UX 바둑앱을 언젠가 만들기 위해 필요한 기초 Unity 공부
 2. 사람에게 적절한 난이도를 가진 바둑 엔진을 만들기 위한 바둑 엔진 실험 환경
-3. 나에게 당장 필요한 실용적인 바둑앱 만들기; 중단된 대국 스크린샷으로부터 이어하기, 전략 전술 도움받기 등
+3. 나에게 당장 필요한 실용적인 바둑앱 만들기; 중단된 대국 스크린샷으로부터 이어하기(→ 조사완료: [kaya-board-recognition](wiki/kaya-board-recognition.md)), 전략 전술 도움받기 등
 
 ### Link
 https://github.com/suragnair/alpha-zero-general

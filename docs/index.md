@@ -3,7 +3,7 @@ title: badukdojang 위키
 description: 프로젝트 위키 진입점 (MOC). 바로가기(현행)와 archive(과거/완료)로 라우팅.
 tags: [moc, index]
 created: 2026-07-16
-updated: 2026-09-13 (Wiki 첫 레퍼런스 — katago-difficulty-knobs 추가)
+updated: 2026-09-17 (board-recognition-alternatives — kaya/moku 외 대안 조사 추가)
 ---
 
 # badukdojang 위키
@@ -31,7 +31,9 @@ LLM 이 어떤 노트를 읽을지 토큰을 거의 안 쓰고 결정할 수 있
 - [katago-engines](wiki/katago-engines.md) — KataGo 기능/모델/튜닝 + 약 엔진(Pachi/GNU Go) 비교, 설정 패널·디버깅 체크리스트
 
 ## Wiki
-- [katago-difficulty-knobs](wiki/katago-difficulty-knobs.md) — KataGo 난이도/강도 파라미터 전체 사전 — 탐색 예산·Human-SL·탐색 왜곡·온도 4층위로 정리
+- [katago-difficulty-knobs](wiki/katago-difficulty-knobs.md) — KataGo 난이도/강도 파라미터 전체 사전 — 탐색 예산·Human-SL·탐색 왜곡·온도 4층위로 정리, badukdojang 매핑+분석 3분리 결정
+- [kaya-board-recognition](wiki/kaya-board-recognition.md) — kaya의 사진→바둑판 인식(Moku RT-DETR+CV)→setup SGF 병합 이어하기 구조 조사 + Moku 모델 개발/학습 데이터 내역, 이식 체크포인트 포함
+- [board-recognition-alternatives](wiki/board-recognition-alternatives.md) — kaya/moku 외 바둑판 인식 오픈소스(gbr·img2sgf·U-Net)·상용(Kifu Snap 등)·데이터셋(Roboflow)·논문 전수 조사, 인쇄 다이어그램 대안과 갭·라이센스 주의 포함
 
 ## Archive — 과거/완료 기록
 - [baduk-mvp](archive/baduk-mvp.md) — 2026-07-05 MVP 완성 노트. @sabaki/Preact 시절. 실행법은 setup-and-usage로 이전됨

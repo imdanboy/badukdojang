@@ -63,7 +63,6 @@ export function Board({
   const [containerWidth, setContainerWidth] = useState(0)
   const [contentRect, setContentRect] = useState<ContentRect | null>(null)
   const [flashError, setFlashError] = useState(false)
-  const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -128,18 +127,29 @@ export function Board({
       ? Math.floor(containerWidth / boardSize)
       : 24
 
+  // Ghost preview: no marker passed → Goban renders a faint ghost stone
+  // (currentPlayer color, ~0.35 opacity) on the hovered empty vertex,
+  // so the user can see whose turn it is before clicking.
+  // AI ghost keeps the hollow circle marker.
   const ghostMarker = useMemo<Marker | null>(() => {
     if (aiGhostVertex !== null) {
       return { type: 'circle' }
     }
-    if (hoveredVertex === null) return null
-    return { type: 'circle' }
-  }, [aiGhostVertex, hoveredVertex])
+    return null
+  }, [aiGhostVertex])
 
+  // Ownership marks skip candidate-move vertices: the A/B/C letter markers
+  // are drawn there, and the nested-square overlay would stack on top and
+  // make the letters unreadable.
   const ownershipMarksList = useMemo(() => {
     if (!showOwnership || ownership === null) return null
-    return ownershipMarks(ownership, signMap, boardSize)
-  }, [showOwnership, ownership, signMap, boardSize])
+    const occupiedByCandidates = new Set(
+      (candidateMoves ?? []).map((v) => `${v[0]}-${v[1]}`),
+    )
+    return ownershipMarks(ownership, signMap, boardSize).filter(
+      (m) => !occupiedByCandidates.has(`${m.cx - 0.5}-${m.cy - 0.5}`),
+    )
+  }, [showOwnership, ownership, signMap, boardSize, candidateMoves])
 
   // Merge the last-move markerMap (circle) with candidate letter markers
   // (A, B, C). Candidates override the last-move circle at overlapping
@@ -195,10 +205,6 @@ export function Board({
     return map
   }, [candidateMoves, signMap])
 
-  const handleMouseMove = (_evt: React.MouseEvent, vertex: Vertex) => {
-    setHoveredVertex(vertex)
-  }
-
   const containerStyle: CSSProperties = {
     width: '100%',
     display: 'flex',
@@ -216,7 +222,6 @@ export function Board({
           signMap={signMap}
           showCoordinates={showCoordinates}
           currentPlayer={currentPlayer}
-          onVertexMouseMove={handleMouseMove}
           {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
           {...(onVertexClick !== undefined ? { onVertexClick } : {})}
           {...(ghostMarker !== null ? { ghostMarker } : {})}

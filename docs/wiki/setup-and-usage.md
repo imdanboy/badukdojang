@@ -3,7 +3,7 @@ title: badukdojang 설치 및 사용법
 description: badukdojang 클론부터 KataGo bridge 실행, 개발 서버, 테스트까지 전체 사용법.
 tags: [setup, usage, katago, kaya, bun, dev]
 created: 2026-08-03
-updated: 2026-08-09 (환경변수 → config/engine.json 기반 설정으로 전환)
+updated: 2026-09-20 (kaya 포크/패치브랜치/업스트림 동기화 절차 추가)
 ---
 
 # badukdojang 설치 및 사용법
@@ -34,6 +34,40 @@ Kaya는 Git Submodule로 포함되어 있으므로 `--recursive`로 클론한다
 git clone --recursive https://github.com/<your-org>/badukdojang.git
 cd badukdojang
 ```
+
+> **Kaya 서브모듈 구조 (2026-09-20~, 정석 포크 방식)**: `.gitmodules`는
+> **포크** `https://github.com/imdanboy/kaya.git`을 가리키고, badukdojang 전용
+> 패치는 포크의 **`badukdojang` 브랜치**에 커밋되어 있다. 서브모듈 포인터가
+> 그 브랜치의 SHA를 기록하므로 새 클론 유저도패치가 적용된 소스를 그대로 받는다.
+> 포크의 `main`은 upstream(`kaya-go/kaya`)을 그대로 추종한다.
+> `patches/kaya/*.patch`(레거시)는 동일 수정분을 담고 있어 setup에서
+> idempotent하게(`already applied → skip`) 동작하지만, 신규 수정은 레포
+> 모노가 아니라 포크 `badukdojang` 브랜치 커밋으로 관리한다.
+
+### Kaya 업스트림 동기화 절차
+
+upstream을 따라잡을 때 패치를 잃지 않는 순서:
+
+```bash
+cd third_party/kaya
+git remote -v                       # upstream = kaya-go/kaya, fork = imdanboy/kaya (이미 설정됨)
+git fetch upstream
+git checkout main
+git rebase upstream/main && git push fork main        # (fork가 upstream과 같으면 rebase/skip)
+git rebase main badukdojang         # 패치 브랜치를 새 upstream 위로
+git push --force fork badukdojang   # rebase했으므로 force
+```
+
+그 뒤 부모 레포에서 포인터 갱신:
+
+```bash
+cd ../..
+git submodule update --remote third_party/kaya   # .gitmodules의 branch=badukdojang 따름
+git add third_party/kaya && git commit -m "chore: bump kaya submodule"
+```
+
+> 포크에서 `badukdojang` 브랜치에 새 커밋(패치 추가 등)을 하려면 같은 경로로
+> 작업 후 `git push fork badukdojang` → 부모 포인터 갱신.
 
 이미 일반 clone을 했다면:
 

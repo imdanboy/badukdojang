@@ -30,8 +30,12 @@ export interface GameSidebarProps {
   onScore: () => void
   onSaveSGF: () => void
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  showWinrate: boolean
+  onToggleWinrate: () => void
   showOwnership: boolean
   onToggleOwnership: () => void
+  showCandidates: boolean
+  onToggleCandidates: () => void
   analysis: AnalyzeResponse | null
   analysisLoading: boolean
   analysisError: string | null
@@ -149,8 +153,12 @@ export function GameSidebar({
   onScore,
   onSaveSGF,
   onFileChange,
+  showWinrate,
+  onToggleWinrate,
   showOwnership,
   onToggleOwnership,
+  showCandidates,
+  onToggleCandidates,
   analysis,
   analysisLoading,
   analysisError,
@@ -270,9 +278,9 @@ export function GameSidebar({
         />
       </div>
 
-      {/* Analysis section — on-demand: the Ownership toggle gates ALL engine
-          analysis (winrate, scoreLead, ownership overlay). While off, zero
-          engine requests are made so compute stays with gameplay. */}
+      {/* Analysis section — three independent display layers fed by ONE
+          shared analysis response. Any toggle being on starts the engine
+          fetch; turning all off stops it. Filtering happens client-side. */}
       <div
         style={{
           display: 'flex',
@@ -282,30 +290,64 @@ export function GameSidebar({
       >
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button
+            id="winrate-toggle"
+            onClick={onToggleWinrate}
+            disabled={!engineEnabled}
+            title={
+              engineEnabled
+                ? showWinrate
+                  ? '승률 표시 끔'
+                  : '승률 표시: 현재 국면 엔진 분석 시작'
+                : '엔진이 꺼져 있습니다'
+            }
+            style={smallBtnStyle(showWinrate, !engineEnabled)}
+          >
+            승률
+          </button>
+          {gameMode === 'selfplay' && (
+            <button
+              id="candidates-toggle"
+              onClick={onToggleCandidates}
+              disabled={!engineEnabled}
+              title={
+                engineEnabled
+                  ? showCandidates
+                    ? '후보 수 표시 끔'
+                    : '후보 수 표시: 현재 국면 엔진 분석 시작'
+                  : '엔진이 꺼져 있습니다'
+              }
+              style={smallBtnStyle(showCandidates, !engineEnabled)}
+            >
+              후보수
+            </button>
+          )}
+          <button
             id="ownership-toggle"
             onClick={onToggleOwnership}
             disabled={!engineEnabled}
             title={
               engineEnabled
                 ? showOwnership
-                  ? '형세판단 끔 (엔진 분석 중지)'
-                  : '형세판단: 현재 국면 엔진 분석 시작'
+                  ? '형세 표시 끔'
+                  : '형세 표시: 현재 국면 엔진 분석 시작'
                 : '엔진이 꺼져 있습니다'
             }
             style={smallBtnStyle(showOwnership, !engineEnabled)}
           >
-            Ownership
+            형세
           </button>
         </div>
-        <AnalysisPanel
-          analysis={analysis}
-          loading={analysisLoading}
-          error={analysisError}
-          engineEnabled={engineEnabled}
-        />
+        {showWinrate && (
+          <AnalysisPanel
+            analysis={analysis}
+            loading={analysisLoading}
+            error={analysisError}
+            engineEnabled={engineEnabled}
+          />
+        )}
       </div>
 
-      {gameMode === 'selfplay' && (
+      {gameMode === 'selfplay' && showCandidates && (
         <CandidateMoves
           candidates={candidates}
           onSelectMove={onSelectCandidate}

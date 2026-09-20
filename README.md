@@ -39,9 +39,11 @@ cloning:
 bun run setup
 ```
 
-This will check out the submodule, apply the required local patches in
-`patches/kaya/`, build the Kaya packages, link them into Bun's global
-registry, and install the rest of the project dependencies.
+This will check out the submodule (our fork `imdanboy/kaya`, branch
+`badukdojang` — includes local patches as real commits), build the Kaya
+packages, link them into Bun's global registry, and install the rest of
+the project dependencies. Upstream sync workflow:
+[docs/wiki/setup-and-usage.md](docs/wiki/setup-and-usage.md).
 
 > Do not run `bun install` alone on a fresh clone — the `@kaya/*` `link:`
 > entries in `package.json` require the setup step first.

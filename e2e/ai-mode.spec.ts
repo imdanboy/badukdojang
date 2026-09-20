@@ -587,19 +587,17 @@ test.describe('AI Mode E2E', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
 
-    // Enable the engine so the winrate panel is active.
+    // Enable the engine so the winrate panel is available.
     await enableEngine(page)
     await page.waitForTimeout(200)
 
-    // Panel should be in idle state before any move.
+    // Panel renders once the winrate toggle is on (idle state before any move).
+    await page.locator('#winrate-toggle').click()
     const panel = page.locator('#analysis-panel')
     await expect(panel).toHaveAttribute('data-state', 'idle')
 
     // Place a stone in self-play mode.
     await clickVertex(page, 3, 3, 19)
-
-    // Analysis is on-demand: toggle Ownership to trigger the fetch.
-    await page.locator('#ownership-toggle').click()
 
     // Winrate label should show "53.2%" within 5 seconds.
     await expect(page.locator('#winrate-label')).toContainText('53.2%', { timeout: 5000 })
@@ -639,9 +637,9 @@ test.describe('AI Mode E2E', () => {
     await enableEngine(page)
     await page.waitForTimeout(200)
 
-    // Place a stone, then toggle Ownership to trigger the analysis fetch.
+    // Place a stone, then toggle the winrate display to trigger the analysis fetch.
     await clickVertex(page, 3, 3, 19)
-    await page.locator('#ownership-toggle').click()
+    await page.locator('#winrate-toggle').click()
 
     // Score lead text should show "흑 +5.3" within 5 seconds.
     await expect(page.locator('#score-lead')).toHaveText('집 차이: 흑 +5.3', {
