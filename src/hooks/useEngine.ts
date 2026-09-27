@@ -6,10 +6,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   loadSettings,
+  loadAnalysisSettings,
   normalizeSettings,
+  saveAnalysisSettings,
   saveSettings,
 } from '../lib/engineSettings.ts'
-import type { EngineSettings } from '../lib/engineSettings.ts'
+import type { AnalysisSettings, EngineSettings } from '../lib/engineSettings.ts'
 import * as katagoAdapter from '../lib/engine/katagoAdapter.ts'
 import { EngineError } from '../lib/engine/types.ts'
 import type { EngineSettings as EngineEngineSettings } from '../lib/engine/types.ts'
@@ -23,6 +25,9 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
   const [engineSettings, setEngineSettings] = useState<EngineSettings>(() =>
     normalizeSettings(loadSettings()),
   )
+  const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettings>(() =>
+    loadAnalysisSettings(),
+  )
   const [humanModelAvailable, setHumanModelAvailable] = useState<boolean | null>(null)
   const [engineError, setEngineError] = useState<EngineError | null>(null)
   const [isRestarting, setIsRestarting] = useState(false)
@@ -32,6 +37,10 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
   useEffect(() => {
     saveSettings(engineSettings)
   }, [engineSettings])
+
+  useEffect(() => {
+    saveAnalysisSettings(analysisSettings)
+  }, [analysisSettings])
 
   const getAnalysisSettings = useCallback((): EngineEngineSettings => {
     return {
@@ -53,23 +62,16 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
   }, [engineSettings, boardSize])
 
   const ANALYSIS_TIMEOUT = 15000
-  // Lightweight but *clean* analysis: enough visits for stable ownership
-  // (5 visits produces noisy, policy-only influence maps) and NO difficulty
-  // overrides (wideRootNoise / playoutDoublingAdvantage / humanSLProfile) —
-  // winrate and ownership must reflect pure strong-KataGo judgment,
-  // independent of the game difficulty the user is playing at.
-  const LIGHT_MAX_VISITS = 80
-  const LIGHT_MAX_TIME = 2
   const getLightAnalysisSettings = useCallback((): EngineEngineSettings => {
     return {
-      maxTime: LIGHT_MAX_TIME,
-      maxVisits: LIGHT_MAX_VISITS,
-      numSearchThreads: 2,
+      maxTime: analysisSettings.maxTime,
+      maxVisits: analysisSettings.maxVisits,
+      numSearchThreads: analysisSettings.numSearchThreads,
       rules: engineSettings.rules,
       komi: engineSettings.rules === 'chinese' ? 7.5 : 6.5,
       boardSize,
     }
-  }, [engineSettings.rules, boardSize])
+  }, [analysisSettings, engineSettings.rules, boardSize])
 
   const handleRestartEngine = useCallback(async () => {
     if (isRestarting) return
@@ -211,6 +213,8 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
   return {
     engineSettings,
     setEngineSettings,
+    analysisSettings,
+    setAnalysisSettings,
     humanModelAvailable,
     engineError,
     setEngineError,

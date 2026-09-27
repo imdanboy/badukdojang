@@ -6,11 +6,10 @@
  */
 import { useMemo, useRef } from 'react'
 import type { RefObject } from 'react'
-import type { Vertex } from '@kaya/goboard'
 import { AnalysisPanel } from './AnalysisPanel.tsx'
-import { CandidateMoves } from './CandidateMoves.tsx'
-import type { CandidateMove } from './CandidateMoves.tsx'
+import { AnalysisSummary } from './AnalysisSummary.tsx'
 import type { AnalyzeResponse } from '../lib/engine/types.ts'
+import type { AnalysisSettings } from '../lib/engineSettings.ts'
 import type { GameState } from '../lib/gameState.ts'
 import type { GameMode } from '../lib/types.ts'
 
@@ -38,12 +37,14 @@ export interface GameSidebarProps {
   onToggleOwnership: () => void
   showCandidates: boolean
   onToggleCandidates: () => void
+  showSummary: boolean
+  onToggleSummary: () => void
   analysis: AnalyzeResponse | null
   analysisLoading: boolean
   analysisError: string | null
   engineEnabled: boolean
-  candidates: readonly CandidateMove[]
-  onSelectCandidate: (vertex: Vertex | 'pass') => void
+  analysisDurationMs: number | null
+  analysisSettings: AnalysisSettings
 }
 
 const btnStyle = (disabled: boolean): React.CSSProperties => ({
@@ -163,12 +164,14 @@ export function GameSidebar({
   onToggleOwnership,
   showCandidates,
   onToggleCandidates,
+  showSummary,
+  onToggleSummary,
   analysis,
   analysisLoading,
   analysisError,
+  analysisDurationMs,
+  analysisSettings,
   engineEnabled,
-  candidates,
-  onSelectCandidate,
 }: GameSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -341,6 +344,14 @@ export function GameSidebar({
             </button>
           )}
           <button
+            id="analysis-summary-toggle"
+            onClick={onToggleSummary}
+            title={showSummary ? '분석 요약 표시 끔' : '분석 요약 표시'}
+            style={smallBtnStyle(showSummary, false)}
+          >
+            분석 요약
+          </button>
+          <button
             id="ownership-toggle"
             onClick={onToggleOwnership}
             disabled={!engineEnabled}
@@ -366,11 +377,13 @@ export function GameSidebar({
         )}
       </div>
 
-      {gameMode === 'selfplay' && showCandidates && (
-        <CandidateMoves
-          candidates={candidates}
-          onSelectMove={onSelectCandidate}
-          disabled={isAiThinking}
+      {showSummary && (
+        <AnalysisSummary
+          analysis={analysis}
+          loading={analysisLoading}
+          error={analysisError}
+          durationMs={analysisDurationMs}
+          settings={analysisSettings}
         />
       )}
     </div>

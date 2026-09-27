@@ -63,6 +63,7 @@ export function App() {
   // them being on gates the engine fetch (compute runs once).
   const [showWinrate, setShowWinrate] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const [showOwnership, setShowOwnership] = useState(false)
   const [showPolicy, setShowPolicy] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -89,6 +90,8 @@ export function App() {
   const {
     engineSettings,
     setEngineSettings,
+    analysisSettings,
+    setAnalysisSettings,
     humanModelAvailable,
     engineError,
     setEngineError,
@@ -111,6 +114,7 @@ export function App() {
     winrateError,
     ownership,
     policy,
+    analysisDurationMs,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
     enabled: analysisEnabled,
@@ -372,12 +376,6 @@ export function App() {
     }
   }
 
-  const handleSelectCandidate = (vertex: Vertex | 'pass') => {
-    if (isAiThinkingRef.current) return
-    if (gameMode !== 'selfplay') return
-    applyMove(vertex)
-  }
-
   // --- Game lifecycle ---------------------------------------------------------
 
   const abortAiAndReset = useCallback(() => {
@@ -613,12 +611,14 @@ export function App() {
               onToggleOwnership={() => setShowOwnership((prev) => !prev)}
               showCandidates={showCandidates}
               onToggleCandidates={() => setShowCandidates((prev) => !prev)}
+              showSummary={showSummary}
+              onToggleSummary={() => setShowSummary((prev) => !prev)}
               analysis={winrateAnalysis}
               analysisLoading={winrateLoading}
               analysisError={winrateError}
               engineEnabled={engineSettings.enabled}
-              candidates={candidates}
-              onSelectCandidate={handleSelectCandidate}
+              analysisDurationMs={analysisDurationMs}
+              analysisSettings={analysisSettings}
             />
           )}
         </div>
@@ -628,6 +628,8 @@ export function App() {
           onClose={() => setSettingsOpen(false)}
           engineSettings={engineSettings}
           onEngineSettingsChange={setEngineSettings}
+          analysisSettings={analysisSettings}
+          onAnalysisSettingsChange={setAnalysisSettings}
           humanModelAvailable={humanModelAvailable}
           showCoordinates={showCoordinates}
           onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}

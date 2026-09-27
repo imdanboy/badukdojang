@@ -32,6 +32,7 @@ export interface AnalyzeRequest {
   readonly komi: number;
   readonly maxVisits?: number;
   readonly maxTime?: number;
+  readonly numSearchThreads?: number;
   readonly humanSLProfile?: string;
   readonly wideRootNoise?: number;
   readonly playoutDoublingAdvantage?: number;
@@ -50,6 +51,7 @@ export interface BestMoveInfo {
 export interface AnalyzeResponse {
   readonly winrate: number;
   readonly scoreLead: number;
+  readonly visits?: number | undefined;
   readonly ownership?: number[] | undefined;
   readonly policy?: number[] | undefined;
   readonly bestMoves?: BestMoveInfo[] | undefined;
@@ -80,6 +82,7 @@ interface AnalysisEngineQuery {
   readonly analyzeTurns: readonly number[];
   readonly maxVisits?: number;
   readonly maxTime?: number;
+  readonly numSearchThreads?: number;
   readonly humanSLProfile?: string;
   readonly includeOwnership?: boolean;
   readonly includePolicy?: boolean;
@@ -91,6 +94,7 @@ interface AnalysisEngineResponse {
   readonly id: string;
   readonly isDuringSearch: boolean;
   readonly rootInfo?: {
+    readonly visits?: number;
     readonly winrate: number;
     readonly scoreLead: number;
   };
@@ -554,7 +558,7 @@ export class KataGoBridge {
   }
 
   private async doAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-    const { boardSize, moves, komi, maxVisits, maxTime, humanSLProfile, wideRootNoise, playoutDoublingAdvantage, includeOwnership, includePolicy, signal } =
+    const { boardSize, moves, komi, maxVisits, maxTime, numSearchThreads, humanSLProfile, wideRootNoise, playoutDoublingAdvantage, includeOwnership, includePolicy, signal } =
       request;
 
     if (this.analysisProcess === null) {
@@ -586,6 +590,9 @@ export class KataGoBridge {
     }
     if (maxTime !== undefined) {
       (query as unknown as Record<string, unknown>).maxTime = maxTime;
+    }
+    if (numSearchThreads !== undefined) {
+      (query as unknown as Record<string, unknown>).numSearchThreads = numSearchThreads;
     }
     if (includePolicy === true) {
       (query as unknown as Record<string, unknown>).includePolicy = true;
@@ -681,6 +688,11 @@ export class KataGoBridge {
     return {
       winrate: rootInfo?.winrate ?? 0,
       scoreLead: rootInfo?.scoreLead ?? 0,
+      // Older/custom KataGo builds may omit rootInfo.visits. In that case,
+      // the move visit counts provide a useful fallback for the summary.
+      visits:
+        rootInfo?.visits ??
+        moveInfos?.reduce((total, move) => total + (move.visits ?? 0), 0),
       ownership: ownership,
       policy: result.policy,
       bestMoves:

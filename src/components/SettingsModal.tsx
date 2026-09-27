@@ -8,19 +8,22 @@ import { useBoardTheme } from '@kaya/themes'
 import type { BuiltInThemeId } from '@kaya/themes'
 import { Modal } from './Modal.tsx'
 import { EngineSettingsForm } from './EngineSettingsForm.tsx'
-import type { EngineSettings } from '../lib/engineSettings.ts'
+import { AnalysisSettingsForm } from './AnalysisSettingsForm.tsx'
+import type { AnalysisSettings, EngineSettings } from '../lib/engineSettings.ts'
 
 export interface SettingsModalProps {
   open: boolean
   onClose: () => void
   engineSettings: EngineSettings
   onEngineSettingsChange: (settings: EngineSettings) => void
+  analysisSettings: AnalysisSettings
+  onAnalysisSettingsChange: (settings: AnalysisSettings) => void
   humanModelAvailable?: boolean | null
   showCoordinates: boolean
   onToggleCoordinates: () => void
 }
 
-type Tab = 'engine' | 'board'
+type Tab = 'engine' | 'analysis' | 'board'
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
   padding: '8px 18px',
@@ -123,6 +126,8 @@ export function SettingsModal({
   onClose,
   engineSettings,
   onEngineSettingsChange,
+  analysisSettings,
+  onAnalysisSettingsChange,
   humanModelAvailable,
   showCoordinates,
   onToggleCoordinates,
@@ -150,6 +155,16 @@ export function SettingsModal({
         </button>
         <button
           type="button"
+          id="settings-tab-analysis"
+          role="tab"
+          aria-selected={tab === 'analysis'}
+          style={tabStyle(tab === 'analysis')}
+          onClick={() => setTab('analysis')}
+        >
+          분석
+        </button>
+        <button
+          type="button"
           id="settings-tab-board"
           role="tab"
           aria-selected={tab === 'board'}
@@ -165,6 +180,11 @@ export function SettingsModal({
           settings={engineSettings}
           onChange={onEngineSettingsChange}
           humanModelAvailable={humanModelAvailable}
+        />
+      ) : tab === 'analysis' ? (
+        <AnalysisSettingsForm
+          settings={analysisSettings}
+          onChange={onAnalysisSettingsChange}
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

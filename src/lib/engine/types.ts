@@ -155,6 +155,8 @@ export interface AnalyzeResponse {
   readonly policyPass?: number
   readonly winrate?: number
   readonly scoreLead?: number
+  /** Total root visits reported by KataGo for this analysis. */
+  readonly visits?: number
   readonly bestMoves?: readonly BestMoveInfo[]
   readonly completed?: boolean
 }

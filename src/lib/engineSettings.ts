@@ -48,9 +48,16 @@ export interface EngineSettings {
   humanMoveMode: HumanMoveMode
 }
 
+export interface AnalysisSettings {
+  maxTime: number
+  maxVisits: number
+  numSearchThreads: number
+}
+
 // --- Constants -------------------------------------------------------------
 
 export const STORAGE_KEY = 'badukdojang-engine-settings'
+export const ANALYSIS_STORAGE_KEY = 'badukdojang-analysis-settings'
 
 export const DEFAULT_SETTINGS: EngineSettings = {
   enabled: false,
@@ -68,6 +75,12 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   humanMoveMode: 'native',
 }
 
+export const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
+  maxTime: 2,
+  maxVisits: 80,
+  numSearchThreads: 2,
+}
+
 export const MIN_THINKING_TIME = 1
 export const MAX_THINKING_TIME = 30
 export const MIN_DIFFICULTY = 1
@@ -78,6 +91,10 @@ const STRONG_MAX_VISITS = 800
 // Advanced knob bounds
 export const MIN_MAX_VISITS = 1
 export const MAX_MAX_VISITS = 2000
+export const MIN_ANALYSIS_TIME = 1
+export const MAX_ANALYSIS_TIME = 60
+export const MIN_ANALYSIS_THREADS = 1
+export const MAX_ANALYSIS_THREADS = 16
 export const MIN_DOUBLING = -3.0
 export const MAX_DOUBLING = 1.0
 export const MIN_NOISE = 0.0
@@ -172,6 +189,46 @@ export function saveSettings(settings: EngineSettings): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   } catch {
     // Storage may be unavailable (private mode, quota) — silently ignore.
+  }
+}
+
+export function loadAnalysisSettings(): AnalysisSettings {
+  try {
+    const raw = localStorage.getItem(ANALYSIS_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_ANALYSIS_SETTINGS }
+    return normalizeAnalysisSettings(JSON.parse(raw) as Partial<AnalysisSettings>)
+  } catch {
+    return { ...DEFAULT_ANALYSIS_SETTINGS }
+  }
+}
+
+export function saveAnalysisSettings(settings: AnalysisSettings): void {
+  try {
+    localStorage.setItem(ANALYSIS_STORAGE_KEY, JSON.stringify(settings))
+  } catch {
+    // Storage may be unavailable — silently ignore.
+  }
+}
+
+export function normalizeAnalysisSettings(
+  partial: Partial<AnalysisSettings>,
+): AnalysisSettings {
+  return {
+    maxTime: clamp(
+      partial.maxTime ?? DEFAULT_ANALYSIS_SETTINGS.maxTime,
+      MIN_ANALYSIS_TIME,
+      MAX_ANALYSIS_TIME,
+    ),
+    maxVisits: clamp(
+      partial.maxVisits ?? DEFAULT_ANALYSIS_SETTINGS.maxVisits,
+      MIN_MAX_VISITS,
+      MAX_MAX_VISITS,
+    ),
+    numSearchThreads: clamp(
+      Math.round(partial.numSearchThreads ?? DEFAULT_ANALYSIS_SETTINGS.numSearchThreads),
+      MIN_ANALYSIS_THREADS,
+      MAX_ANALYSIS_THREADS,
+    ),
   }
 }
 

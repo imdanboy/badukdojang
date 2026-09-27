@@ -309,6 +309,7 @@ export async function requestAnalysis(
   if (settings.maxTime !== undefined) {
     body.maxTime = settings.maxTime
   }
+  body.numSearchThreads = settings.numSearchThreads
   if (settings.humanSLProfile !== undefined) {
     body.humanSLProfile = settings.humanSLProfile
   }
@@ -511,4 +512,3 @@ export async function requestMovePolicyWeighted(
   const difficulty = settings.difficulty ?? 10
   return pickMoveFromPolicy(analysis.policy, boardSize, difficulty, occupied)
 }
-

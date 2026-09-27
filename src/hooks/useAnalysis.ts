@@ -33,8 +33,10 @@ export function useAnalysis({
   const [winrateAnalysis, setWinrateAnalysis] = useState<AnalyzeResponse | null>(null)
   const [winrateLoading, setWinrateLoading] = useState(false)
   const [winrateError, setWinrateError] = useState<string | null>(null)
+  const [analysisDurationMs, setAnalysisDurationMs] = useState<number | null>(null)
   const [ownership, setOwnership] = useState<readonly number[] | null>(null)
   const winrateReqRef = useRef(0)
+  const lastAnalysisKeyRef = useRef<string | null>(null)
 
   // Stale ownership must not survive a board change.
   useEffect(() => {
@@ -46,7 +48,6 @@ export function useAnalysis({
   // concurrency on the single katago analysis process stdout.
   useEffect(() => {
     if (!engineEnabled || !enabled) {
-      setWinrateAnalysis(null)
       setWinrateError(null)
       setWinrateLoading(false)
       return
@@ -54,15 +55,23 @@ export function useAnalysis({
 
     const hasAnyStone = signMap.some((row) => row.some((cell) => cell !== 0))
     if (!hasAnyStone) {
-      setWinrateAnalysis(null)
       setWinrateError(null)
       setWinrateLoading(false)
+      return
+    }
+
+    const requestKey = JSON.stringify({
+      signMap,
+      settings: getLightAnalysisSettings(),
+    })
+    if (lastAnalysisKeyRef.current === requestKey && winrateAnalysis !== null) {
       return
     }
 
     const reqId = ++winrateReqRef.current
     setWinrateLoading(true)
     setWinrateError(null)
+    const startedAt = performance.now()
 
     const controller = new AbortController()
     let cancelled = false
@@ -77,6 +86,8 @@ export function useAnalysis({
         )
         if (cancelled || reqId !== winrateReqRef.current) return
         setWinrateAnalysis(analysis)
+        lastAnalysisKeyRef.current = requestKey
+        setAnalysisDurationMs(performance.now() - startedAt)
         setOwnership(analysis.ownership ?? null)
         setWinrateError(null)
       } catch (err) {
@@ -93,7 +104,15 @@ export function useAnalysis({
       cancelled = true
       controller.abort()
     }
-  }, [signMap, engineEnabled, enabled, gameState, getLightAnalysisSettings, timeoutMs])
+  }, [
+    signMap,
+    engineEnabled,
+    enabled,
+    gameState,
+    getLightAnalysisSettings,
+    timeoutMs,
+    winrateAnalysis,
+  ])
 
   return {
     winrateAnalysis,
@@ -101,5 +120,6 @@ export function useAnalysis({
     winrateError,
     ownership,
     policy: winrateAnalysis?.policy ?? null,
+    analysisDurationMs,
   }
 }
