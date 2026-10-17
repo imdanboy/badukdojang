@@ -848,4 +848,42 @@ test.describe('AI Mode E2E', () => {
       fullPage: true,
     })
   })
+
+  test('(p) AI analysis panel toggles and shows last AI move stats', async ({
+    page,
+  }) => {
+    await enableEngine(page)
+    await page.waitForTimeout(200)
+
+    await page.locator('#mode-ai').click()
+    await page.waitForTimeout(200)
+
+    // The AI-analysis toggle only appears in AI mode.
+    const toggle = page.locator('#ai-analysis-toggle')
+    await expect(toggle).toBeVisible()
+    await expect(toggle).toContainText('AI 분석')
+
+    // Panel is hidden by default.
+    const panel = page.locator('#ai-analysis-panel')
+    await expect(panel).toHaveCount(0)
+
+    await toggle.click()
+    await page.waitForTimeout(200)
+    await expect(panel).toBeVisible()
+    await expect(panel).toContainText('아직 AI가 수를 두지 않았습니다')
+
+    // Human plays a move; AI responds.
+    await clickVertex(page, 3, 3, 19)
+    await expect(async () => {
+      const stones = page.locator('.shudan-stone')
+      await expect(stones).toHaveCount(2)
+    }).toPass({ timeout: 10000 })
+
+    // Stats from the AI's last genmove should now be visible.
+    await expect(panel).toContainText('착수')
+    await expect(panel).toContainText('분석 시간')
+    await expect(panel).toContainText('총 방문 수')
+    await expect(panel).toContainText('분석 스레드')
+    await expect(panel).toContainText('탐색 한도')
+  })
 })

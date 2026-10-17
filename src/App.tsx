@@ -25,6 +25,7 @@ import { Toast } from './components/Toast.tsx'
 import { EngineErrorModal } from './components/EngineErrorModal.tsx'
 import { ScoringModal } from './components/ScoringModal.tsx'
 import type { CandidateMove } from './components/CandidateMoves.tsx'
+import type { AiMoveStats } from './components/AiAnalysisPanel.tsx'
 import { useEngine } from './hooks/useEngine.ts'
 import { useAnalysis } from './hooks/useAnalysis.ts'
 import { useScoring } from './hooks/useScoring.ts'
@@ -66,6 +67,8 @@ export function App() {
   const [showSummary, setShowSummary] = useState(false)
   const [showOwnership, setShowOwnership] = useState(false)
   const [showPolicy, setShowPolicy] = useState(false)
+  const [showAiAnalysis, setShowAiAnalysis] = useState(false)
+  const [aiMoveStats, setAiMoveStats] = useState<AiMoveStats | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
@@ -300,11 +303,14 @@ export function App() {
     setIsAiThinking(true)
     const generation = gameGenerationRef.current
 
+    const aiSettings = getAnalysisSettings()
+    const aiMoveStart = performance.now()
+
     try {
       const response = await katagoAdapter.requestMove(
         gameState.gameTree,
         gameState.currentPlayer,
-        getAnalysisSettings(),
+        aiSettings,
       )
 
       if (generation !== gameGenerationRef.current) return
@@ -336,6 +342,16 @@ export function App() {
           setAiFlashVertex(response)
         }
       }
+
+      setAiMoveStats({
+        durationMs: performance.now() - aiMoveStart,
+        settings: {
+          maxVisits: aiSettings.maxVisits ?? 0,
+          maxTime: aiSettings.maxTime ?? 0,
+          numSearchThreads: aiSettings.numSearchThreads ?? 1,
+        },
+        moveNumber: getMoveList(gameState.gameTree).length,
+      })
     } catch (error) {
       if (generation !== gameGenerationRef.current) return
       if (error instanceof EngineError) {
@@ -392,6 +408,7 @@ export function App() {
   /** Hard reset to an empty board (keeps current size/mode). */
   const handleNewGame = useCallback(() => {
     abortAiAndReset()
+    setAiMoveStats(null)
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
@@ -401,11 +418,12 @@ export function App() {
   /** New-game modal confirm: apply config, reset the board. */
   const handleStartNewGame = useCallback(
     (config: NewGameConfig) => {
-      setEngineSettings((prev) =>
-        applyPlayStyle(applyDifficulty(prev, config.difficulty), config.playStyle),
-      )
-      abortAiAndReset()
-      const newGameState = createGameState(config.size)
+    setEngineSettings((prev) =>
+      applyPlayStyle(applyDifficulty(prev, config.difficulty), config.playStyle),
+    )
+    abortAiAndReset()
+    setAiMoveStats(null)
+    const newGameState = createGameState(config.size)
       setGameState(newGameState)
       setSignMap(newGameState.getSignMap())
       setMoveVersion((v) => v + 1)
@@ -613,6 +631,9 @@ export function App() {
               onToggleCandidates={() => setShowCandidates((prev) => !prev)}
               showSummary={showSummary}
               onToggleSummary={() => setShowSummary((prev) => !prev)}
+              showAiAnalysis={showAiAnalysis}
+              onToggleAiAnalysis={() => setShowAiAnalysis((prev) => !prev)}
+              aiMoveStats={aiMoveStats}
               analysis={winrateAnalysis}
               analysisLoading={winrateLoading}
               analysisError={winrateError}

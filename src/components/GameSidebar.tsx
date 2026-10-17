@@ -8,6 +8,8 @@ import { useMemo, useRef } from 'react'
 import type { RefObject } from 'react'
 import { AnalysisPanel } from './AnalysisPanel.tsx'
 import { AnalysisSummary } from './AnalysisSummary.tsx'
+import { AiAnalysisPanel } from './AiAnalysisPanel.tsx'
+import type { AiMoveStats } from './AiAnalysisPanel.tsx'
 import type { AnalyzeResponse } from '../lib/engine/types.ts'
 import type { AnalysisSettings } from '../lib/engineSettings.ts'
 import type { GameState } from '../lib/gameState.ts'
@@ -39,6 +41,9 @@ export interface GameSidebarProps {
   onToggleCandidates: () => void
   showSummary: boolean
   onToggleSummary: () => void
+  showAiAnalysis: boolean
+  onToggleAiAnalysis: () => void
+  aiMoveStats: AiMoveStats | null
   analysis: AnalyzeResponse | null
   analysisLoading: boolean
   analysisError: string | null
@@ -166,6 +171,9 @@ export function GameSidebar({
   onToggleCandidates,
   showSummary,
   onToggleSummary,
+  showAiAnalysis,
+  onToggleAiAnalysis,
+  aiMoveStats,
   analysis,
   analysisLoading,
   analysisError,
@@ -366,6 +374,16 @@ export function GameSidebar({
           >
             형세
           </button>
+          {gameMode === 'ai' && (
+            <button
+              id="ai-analysis-toggle"
+              onClick={onToggleAiAnalysis}
+              title={showAiAnalysis ? 'AI 분석 정보 끔' : 'AI 분석 정보 표시'}
+              style={smallBtnStyle(showAiAnalysis, false)}
+            >
+              AI 분석
+            </button>
+          )}
         </div>
         {showWinrate && (
           <AnalysisPanel
@@ -385,6 +403,10 @@ export function GameSidebar({
           durationMs={analysisDurationMs}
           settings={analysisSettings}
         />
+      )}
+
+      {gameMode === 'ai' && showAiAnalysis && (
+        <AiAnalysisPanel stats={aiMoveStats} isThinking={isAiThinking} />
       )}
     </div>
   )
