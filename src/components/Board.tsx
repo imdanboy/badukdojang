@@ -38,6 +38,8 @@ export interface BoardProps {
   candidateMoves?: CandidateMoveMarker[] | undefined
   /** Vertices to dim (e.g., dead stones in scoring mode). */
   dimmedVertices?: Vertex[] | undefined
+  /** When true, suppress the faint hover ghost stone (e.g., opponent's turn). */
+  hoverGhostDisabled?: boolean
 }
 
 export interface CandidateMoveMarker {
@@ -69,6 +71,7 @@ export function Board({
   showPolicy = false,
   candidateMoves = undefined,
   dimmedVertices = undefined,
+  hoverGhostDisabled = false,
 }: BoardProps) {
   const { boardTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -143,13 +146,18 @@ export function Board({
   // Ghost preview: no marker passed → Goban renders a faint ghost stone
   // (currentPlayer color, ~0.35 opacity) on the hovered empty vertex,
   // so the user can see whose turn it is before clicking.
-  // AI ghost keeps the hollow circle marker.
+  // AI ghost keeps the hollow circle marker; while the opponent's (AI's)
+  // turn blocks any placement, `{ type: 'none' }` suppresses the hover
+  // ghost entirely.
   const ghostMarker = useMemo<Marker | null>(() => {
     if (aiGhostVertex !== null) {
       return { type: 'circle' }
     }
+    if (hoverGhostDisabled) {
+      return { type: 'none' }
+    }
     return null
-  }, [aiGhostVertex])
+  }, [aiGhostVertex, hoverGhostDisabled])
 
   // Ownership marks skip candidate-move vertices: the numeric candidate
   // marker is drawn there, and the overlays would stack on top of each other.

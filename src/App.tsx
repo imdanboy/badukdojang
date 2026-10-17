@@ -592,6 +592,7 @@ export function App() {
               showPolicy={showPolicy}
               candidateMoves={showCandidates ? candidateMarkers : undefined}
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
+              hoverGhostDisabled={isAiThinking}
             />
             {!zenMode && (
               <PlaybackBar
