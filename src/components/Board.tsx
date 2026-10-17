@@ -5,7 +5,7 @@
  * Flashes a red border for 200ms when an illegal move is attempted.
  * The board theme is read from BoardThemeProvider context — the single
  * source of truth (no duplicated theme state in App).
- * Ownership overlay: OGS-style nested-square marks sized by confidence,
+ * Ownership overlay: OGS-style solid square marks sized by confidence,
  * rendered as an SVG layer aligned to the Goban's measured content area.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -326,7 +326,6 @@ export function Board({
             })}
             {ownershipMarksList?.map((m) => {
               const half = m.size / 2
-              const inner = m.size * 0.55
               return (
                 <g
                   key={`${m.cx}-${m.cy}`}
@@ -337,14 +336,7 @@ export function Board({
                     y={m.cy - half}
                     width={m.size}
                     height={m.size}
-                    className="ownership-mark-outer"
-                  />
-                  <rect
-                    x={m.cx - inner / 2}
-                    y={m.cy - inner / 2}
-                    width={inner}
-                    height={inner}
-                    className="ownership-mark-inner"
+                    className="ownership-mark-square"
                   />
                 </g>
               )

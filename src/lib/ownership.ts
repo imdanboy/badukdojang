@@ -9,8 +9,10 @@
 //   negative  → White owns the point
 //   magnitude → confidence (0 = nobody, 1 = fully owned)
 //
-// The overlay follows the OGS convention: small nested-square markers on
-// intersections (stones included), whose size scales with confidence.
+// The overlay follows the OGS score-estimator convention: a single solid
+// square centered on the intersection. The square's side scales linearly with
+// confidence, and it is drawn on empty points and on stones whose predicted
+// owner differs from the stone colour (e.g. dead stones).
 //
 // Reference: KataGo Analysis_Engine.md (`ownership` field).
 // ============================================================================
@@ -41,22 +43,18 @@ export function ownershipToGrid(
 /** Minimum |ownership| for a mark to be drawn (below this is visual noise). */
 export const OWNERSHIP_MIN_CONFIDENCE = 0.08
 
-/** Outer square side in fraction of a cell, at full confidence (|value| = 1). */
-export const OWNERSHIP_MAX_SIZE = 0.52
-
-/** Outer square side in fraction of a cell, at the confidence threshold. */
-export const OWNERSHIP_MIN_SIZE = 0.18
+/** Square side in fraction of a cell, at full confidence (|value| = 1). */
+export const OWNERSHIP_MAX_SIZE = 0.5
 
 /**
- * Outer square side as a fraction of one cell for a given ownership value.
+ * Square side as a fraction of one cell for a given ownership value.
  *
  * Confidence (`|value|`) maps linearly to size, clamped to
- * [OWNERSHIP_MIN_SIZE, OWNERSHIP_MAX_SIZE] so weak ownership is still
- * visible and malformed engine values cannot overflow the cell.
+ * [0, OWNERSHIP_MAX_SIZE] so malformed engine values cannot overflow the cell.
  */
 export function ownershipSize(value: number): number {
   const confidence = Math.min(1, Math.max(0, Math.abs(value)))
-  return OWNERSHIP_MIN_SIZE + (OWNERSHIP_MAX_SIZE - OWNERSHIP_MIN_SIZE) * confidence
+  return OWNERSHIP_MAX_SIZE * confidence
 }
 
 /**
@@ -78,9 +76,10 @@ export interface OwnershipMark {
 /**
  * Build the list of ownership marks to render on the overlay.
  *
- * Marks are drawn on empty intersections only — placed stones stay fully
- * visible, and the surrounding empty-point marks already communicate the
- * predicted territory (the original Sabaki/Lizzie heatmap convention).
+ * Following OGS, marks are drawn on empty intersections and on stones whose
+ * predicted owner differs from the stone colour (indicating a likely dead or
+ * wrongly-coloured stone). When the owner matches an existing stone, the stone
+ * itself already conveys the information and no extra mark is drawn.
  *
  * `signMap` is Shudan's board state: `0` empty, `1` black, `-1` white.
  */
@@ -94,14 +93,17 @@ export function ownershipMarks(
   const marks: OwnershipMark[] = []
   for (let y = 0; y < boardSize; y++) {
     for (let x = 0; x < boardSize; x++) {
-      if (signMap[y]?.[x] !== 0) continue
       const value = grid[y]![x]!
       if (Math.abs(value) < OWNERSHIP_MIN_CONFIDENCE) continue
+      const stoneSign = signMap[y]?.[x] ?? 0
+      const ownerSign = value > 0 ? 1 : -1
+      // OGS: skip if the owner matches the existing stone colour.
+      if (stoneSign !== 0 && stoneSign === ownerSign) continue
       marks.push({
         cx: x + 0.5,
         cy: y + 0.5,
         size: ownershipSize(value),
-        sign: value > 0 ? 1 : -1,
+        sign: ownerSign,
       })
     }
   }

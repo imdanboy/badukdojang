@@ -505,7 +505,7 @@ test.describe('AI Mode E2E', () => {
     })
   })
 
-  test('(k) ownership overlay toggles on and shows nested-square confidence marks', async ({ page }) => {
+  test('(k) ownership overlay toggles on and shows square confidence marks', async ({ page }) => {
     // Ownership gradient: top-left → Black (positive), bottom-right → White (negative).
     const boardSize = 19
     const ownership = new Array<number>(boardSize * boardSize)
