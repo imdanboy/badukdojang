@@ -488,6 +488,58 @@ describe('HTTP Server', () => {
     expect(body.completed).toBe(true);
   });
 
+  it('GET /api/gtp/models should return a model list', async () => {
+    const res = await fetch(`http://localhost:${server.port}/api/gtp/models`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      currentModelPath: string | null;
+      currentAnalysisModelPath: string | null;
+      models: Array<{ name: string; path: string; current: boolean }>;
+    };
+    expect(Array.isArray(body.models)).toBe(true);
+    for (const model of body.models) {
+      expect(typeof model.name).toBe('string');
+      expect(typeof model.path).toBe('string');
+      expect(typeof model.current).toBe('boolean');
+    }
+  });
+
+  it('POST /api/gtp/model should 400 for missing modelPath', async () => {
+    const res = await fetch(`http://localhost:${server.port}/api/gtp/model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ foo: 'bar' }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('modelPath');
+  });
+
+  it('POST /api/gtp/model should 400 for a nonexistent model file', async () => {
+    const res = await fetch(`http://localhost:${server.port}/api/gtp/model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelPath: '/nonexistent/no-such-model.bin.gz' }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('not found');
+  });
+
+  it('POST /api/gtp/model should 400 for a nonexistent analysis model file', async () => {
+    const res = await fetch(`http://localhost:${server.port}/api/gtp/model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        modelPath: '/nonexistent/no-such-model.bin.gz',
+        target: 'analysis',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('not found');
+  });
+
   it('should return 404 for unknown paths', async () => {
     const res = await fetch(`http://localhost:${server.port}/api/unknown`);
     expect(res.status).toBe(404);

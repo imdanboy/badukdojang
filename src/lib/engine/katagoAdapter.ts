@@ -179,6 +179,61 @@ export async function restartEngine(settings: EngineSettings): Promise<void> {
   await initializeEngine(settings)
 }
 
+// ---------------------------------------------------------------------------
+// Model management (bridge-backed)
+// ---------------------------------------------------------------------------
+
+export interface ModelInfo {
+  readonly name: string
+  readonly path: string
+  readonly current: boolean
+}
+
+export interface ModelListResponse {
+  readonly currentModelPath: string | null
+  readonly currentAnalysisModelPath: string | null
+  readonly models: readonly ModelInfo[]
+}
+
+/** Which engine(s) a model switch applies to. */
+export type ModelSwitchTarget = 'main' | 'analysis'
+
+/** List model files found next to the current main model on the bridge machine. */
+export async function listModels(): Promise<ModelListResponse> {
+  const response = await fetch(`${API_BASE}/models`)
+  if (!response.ok) {
+    throw new EngineError('ENGINE_OFFLINE', `HTTP ${response.status}`)
+  }
+  return (await response.json()) as ModelListResponse
+}
+
+/**
+ * Switch the model. The bridge persists the choice to config/engine.json
+ * and respawns the affected KataGo processes — takes a few seconds.
+ * - 'main': respawns both GTP and analysis processes (re-send engine
+ *   params afterwards via initializeEngine).
+ * - 'analysis': respawns only the analysis process (light settings are
+ *   sent per request, nothing else to re-init).
+ */
+export async function switchModel(
+  modelPath: string,
+  target: ModelSwitchTarget = 'main',
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/model`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modelPath, target }),
+  })
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`
+    try {
+      const errBody = (await response.json()) as { error?: string }
+      if (errBody.error) detail = errBody.error
+    } catch { /* ignore parse failure */ }
+    throw new EngineError('ENGINE_OFFLINE', detail)
+  }
+}
+
 export async function initializeEngine(settings: EngineSettings): Promise<void> {
   const boardSize = settings.boardSize ?? 19
 

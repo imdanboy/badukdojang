@@ -653,6 +653,7 @@ export function App() {
           analysisSettings={analysisSettings}
           onAnalysisSettingsChange={setAnalysisSettings}
           humanModelAvailable={humanModelAvailable}
+          onModelChanged={handleRestartEngine}
           showCoordinates={showCoordinates}
           onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}
         />

@@ -5,7 +5,8 @@
  * for the frontend to communicate with KataGo.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,6 +65,18 @@ export interface HealthResponse {
   readonly humanModelAvailable?: boolean | undefined;
 }
 
+export interface ModelInfo {
+  readonly name: string;
+  readonly path: string;
+  readonly current: boolean;
+}
+
+export interface ModelListResponse {
+  readonly currentModelPath: string | null;
+  readonly currentAnalysisModelPath: string | null;
+  readonly models: readonly ModelInfo[];
+}
+
 interface QueuedCommand {
   readonly command: string;
   readonly resolve: (value: string) => void;
@@ -120,12 +133,19 @@ interface EngineConfig {
   readonly katagoBinary?: string;
   readonly katagoConfigPath?: string;
   readonly modelPath?: string;
+  /** Optional separate model for the analysis engine; falls back to modelPath. */
+  readonly analysisModelPath?: string;
   readonly humanModelPath?: string;
   readonly analysisConfigPath?: string | null;
   readonly port?: number;
 }
 
 let cachedFileConfig: Partial<EngineConfig> | null = null;
+
+/** Runtime model switch target — set by POST /api/gtp/model, lives until the bridge restarts. */
+let modelPathOverride: string | null = null;
+/** Runtime analysis-model switch target — switches only the analysis process. */
+let analysisModelPathOverride: string | null = null;
 
 function loadFileConfig(): Partial<EngineConfig> {
   if (cachedFileConfig !== null) return cachedFileConfig;
@@ -182,12 +202,26 @@ function getKatagoConfigPath(): string {
 }
 
 function getModelPath(): string {
-  const raw = getEnv('KATAGO_MODEL_PATH') ?? loadFileConfig().modelPath;
+  // Priority: env var > runtime override (model switch) > config file.
+  const raw =
+    getEnv('KATAGO_MODEL_PATH') ??
+    modelPathOverride ??
+    loadFileConfig().modelPath;
   if (raw === undefined || raw === '') {
     throw new Error(
       'Missing model path. Set `modelPath` in config/engine.json (see config/engine.example.json) or export KATAGO_MODEL_PATH.'
     );
   }
+  return expandHome(raw);
+}
+
+/** Model for the analysis engine — dedicated override/config, else the main model. */
+function getAnalysisModelPath(): string {
+  const raw =
+    getEnv('KATAGO_ANALYSIS_MODEL_PATH') ??
+    analysisModelPathOverride ??
+    loadFileConfig().analysisModelPath;
+  if (raw === undefined || raw === '') return getModelPath();
   return expandHome(raw);
 }
 
@@ -262,7 +296,8 @@ export class KataGoBridge {
   private isProcessing = false;
   private responseResolve: ((value: string) => void) | null = null;
   private responseReject: ((reason: Error) => void) | null = null;
-  private readerRunning = false;
+  /** In-flight stdout reader loop for the current GTP process; null when not reading. */
+  private readerDone: Promise<void> | null = null;
   private version: string | undefined;
   private restartAttempted = false;
   private engineDead = false;
@@ -306,11 +341,32 @@ export class KataGoBridge {
     this.startReader();
 
     // Start analysis engine
+    await this.spawnAnalysisProcess();
+
+    // Wait a moment for engine to initialize, then get version
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const versionResponse = await this.sendCommand('version', 5000);
+      this.version = versionResponse.trim();
+    } catch {
+      // version command may not be supported; ignore
+    }
+  }
+
+  /**
+   * Spawn (or re-spawn) only the analysis engine. Runs with its own model
+   * (analysisModelPath / override) so analysis can use a lighter net than
+   * the play engine without touching the GTP process.
+   */
+  private async spawnAnalysisProcess(): Promise<void> {
+    const binary = getKatagoBinary();
+    const analysisModelPath = getAnalysisModelPath();
+    const humanModelPath = getHumanModelPath();
     const analysisConfigPath =
       getAnalysisConfigPath() ??
       (await resolveDefaultAnalysisConfig()) ??
       '/opt/homebrew/Cellar/katago/1.16.4/share/katago/configs/analysis_example.cfg';
-    const analysisArgs = ['analysis', '-model', modelPath, '-config', analysisConfigPath];
+    const analysisArgs = ['analysis', '-model', analysisModelPath, '-config', analysisConfigPath];
     if (humanModelPath !== undefined) {
       analysisArgs.push('-human-model', humanModelPath);
     }
@@ -343,15 +399,6 @@ export class KataGoBridge {
     this.analysisProcess.exited.then(() => this.handleProcessDeath()).catch((err) => {
       console.error('KataGo analysis process exit monitoring error:', err);
     });
-
-    // Wait a moment for engine to initialize, then get version
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    try {
-      const versionResponse = await this.sendCommand('version', 5000);
-      this.version = versionResponse.trim();
-    } catch {
-      // version command may not be supported; ignore
-    }
   }
 
   private handleProcessDeath(): void {
@@ -392,8 +439,10 @@ export class KataGoBridge {
   }
 
   private async startReader(): Promise<void> {
-    if (this.readerRunning || this.process === null) return;
-    this.readerRunning = true;
+    // Guard against a second reader on the same stdout. The previous
+    // reader finishes (and clears readerDone) once its stream closes —
+    // e.g. right after a kill in switchModel.
+    if (this.readerDone !== null || this.process === null) return;
 
     if (!(this.process.stdout instanceof ReadableStream)) {
       throw new Error('KataGo stdout is not a ReadableStream');
@@ -402,40 +451,51 @@ export class KataGoBridge {
     let buffer: string[] = [];
     let inResponse = false;
 
-    try {
-      for await (const line of lines) {
-        if (!inResponse) {
-          if (line.startsWith('=') || line.startsWith('?')) {
-            inResponse = true;
-            buffer = [line];
-          }
-        } else {
-          if (line === '') {
-            const response = buffer.join('\n');
-            inResponse = false;
-            buffer = [];
-
-            if (this.responseResolve !== null) {
-              this.responseResolve(response);
-              this.responseResolve = null;
-              this.responseReject = null;
+    this.readerDone = (async () => {
+      try {
+        for await (const line of lines) {
+          if (!inResponse) {
+            if (line.startsWith('=') || line.startsWith('?')) {
+              inResponse = true;
+              buffer = [line];
             }
           } else {
-            buffer.push(line);
+            if (line === '') {
+              const response = buffer.join('\n');
+              inResponse = false;
+              buffer = [];
+
+              if (this.responseResolve !== null) {
+                this.responseResolve(response);
+                this.responseResolve = null;
+                this.responseReject = null;
+              }
+            } else {
+              buffer.push(line);
+            }
           }
         }
+      } catch (error) {
+        if (this.responseReject !== null) {
+          this.responseReject(
+            error instanceof Error ? error : new Error(String(error))
+          );
+          this.responseResolve = null;
+          this.responseReject = null;
+        }
+      } finally {
+        this.readerDone = null;
       }
-    } catch (error) {
-      if (this.responseReject !== null) {
-        this.responseReject(
-          error instanceof Error ? error : new Error(String(error))
-        );
-        this.responseResolve = null;
-        this.responseReject = null;
-      }
-    } finally {
-      this.readerRunning = false;
-    }
+    })();
+  }
+
+  /** Wait (bounded) for the current stdout reader loop to finish. */
+  private async waitForReaderExit(): Promise<void> {
+    if (this.readerDone === null) return;
+    await Promise.race([
+      this.readerDone,
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
   }
 
   sendCommand(command: string, timeoutMs = 30000): Promise<string> {
@@ -711,6 +771,132 @@ export class KataGoBridge {
     return this.engineDead;
   }
 
+  /**
+   * List KataGo model files found next to the current model, with the
+   * active one flagged. Works even when the engine is dead so the user
+   * can switch models to recover.
+   */
+  listModels(): ModelListResponse {
+    let currentModelPath: string | null = null;
+    let currentAnalysisModelPath: string | null = null;
+    try {
+      currentModelPath = expandHome(getModelPath());
+      currentAnalysisModelPath = expandHome(getAnalysisModelPath());
+    } catch {
+      // No model configured (fresh clone, env-only setups) — empty list.
+      return { currentModelPath: null, currentAnalysisModelPath: null, models: [] };
+    }
+    const dir = dirname(currentModelPath);
+    const humanPath = getHumanModelPath();
+    if (!existsSync(dir)) {
+      return { currentModelPath, currentAnalysisModelPath, models: [] };
+    }
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return { currentModelPath, currentAnalysisModelPath, models: [] };
+    }
+    const models = entries
+      .filter((name) => /\.(bin\.gz|txt\.gz)$/.test(name))
+      .filter((name) => humanPath === undefined || `${dir}/${name}` !== humanPath)
+      .sort()
+      .map((name) => ({
+        name,
+        path: `${dir}/${name}`,
+        current: `${dir}/${name}` === currentModelPath,
+      }));
+    return { currentModelPath, currentAnalysisModelPath, models };
+  }
+
+  /**
+   * Switch the model at runtime and respawn the affected engine(s).
+   *
+   * - target 'main' (default): persists to `modelPath` and respawns BOTH
+   *   the GTP and analysis processes.
+   * - target 'analysis': persists to `analysisModelPath` and respawns ONLY
+   *   the analysis process, letting analysis run a lighter model than play.
+   *
+   * The choice is persisted to config/engine.json either way.
+   */
+  async switchModel(
+    modelPath: string,
+    target: 'main' | 'analysis' = 'main'
+  ): Promise<string> {
+    const absolutePath = expandHome(modelPath);
+    if (!/\.(bin\.gz|txt\.gz)$/.test(absolutePath)) {
+      throw new Error('Not a KataGo model file (.bin.gz or .txt.gz)');
+    }
+    if (!existsSync(absolutePath)) {
+      throw new Error(`Model file not found: ${absolutePath}`);
+    }
+    const humanPath = getHumanModelPath();
+    if (humanPath !== undefined && absolutePath === humanPath) {
+      throw new Error('Human-SL 모델은 메인 모델로 사용할 수 없습니다');
+    }
+
+    if (target === 'analysis') {
+      analysisModelPathOverride = absolutePath;
+      this.persistModelPath(absolutePath, 'analysis');
+      // Kill only the analysis process. shuttingDown suppresses
+      // handleProcessDeath from full-restarting on the intentional kill.
+      const oldAnalysis = this.analysisProcess;
+      this.shuttingDown = true;
+      if (oldAnalysis !== null) {
+        oldAnalysis.kill();
+        this.analysisProcess = null;
+      }
+      this.shuttingDown = false;
+      await this.spawnAnalysisProcess();
+      console.log(`[bridge] Analysis model switched to ${absolutePath}`);
+      return absolutePath;
+    }
+
+    modelPathOverride = absolutePath;
+    this.persistModelPath(absolutePath, 'main');
+
+    // Respawn both engines. shuttingDown suppresses handleProcessDeath
+    // from racing the intentional kill with an old-model restart; it stays
+    // true until the fresh processes are up.
+    this.shuttingDown = true;
+    this.stopInternal();
+    // The kill closes the old stdout, which ends the reader loop; wait for
+    // it so the next startReader() isn't skipped by the single-reader guard.
+    await this.waitForReaderExit();
+    this.engineDead = false;
+    this.restartAttempted = false;
+    try {
+      await this.start();
+    } finally {
+      this.shuttingDown = false;
+    }
+    console.log(`[bridge] Model switched to ${absolutePath}`);
+    return absolutePath;
+  }
+
+  private persistModelPath(
+    modelPath: string,
+    target: 'main' | 'analysis' = 'main'
+  ): void {
+    try {
+      const path = `${import.meta.dir}/../../config/engine.json`;
+      let json: Record<string, unknown> = {};
+      if (existsSync(path)) {
+        try {
+          json = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+        } catch {
+          // Replace malformed file with a minimal one.
+        }
+      }
+      json[target === 'analysis' ? 'analysisModelPath' : 'modelPath'] = modelPath;
+      writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+      resetEngineConfigCache();
+    } catch (error) {
+      // Non-fatal: the in-memory override still covers this session.
+      console.error('Failed to persist modelPath to config/engine.json:', error);
+    }
+  }
+
   async health(): Promise<HealthResponse> {
     if (this.engineDead || this.process === null || this.analysisProcess === null) {
       return { status: 'error' };
@@ -768,6 +954,75 @@ export function createServer(bridge: KataGoBridge): ReturnType<typeof Bun.serve>
       }
 
       try {
+        // Model management — reachable even when the engine is dead so the
+        // user can recover by switching to a different model file.
+        if (pathname === '/api/gtp/models' && request.method === 'GET') {
+          const result = bridge.listModels();
+          return new Response(JSON.stringify(result), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        if (pathname === '/api/gtp/model' && request.method === 'POST') {
+          let body: unknown;
+          try {
+            body = await request.json();
+          } catch {
+            return new Response(
+              JSON.stringify({ error: 'Invalid JSON body' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
+          const modelPath =
+            body !== null &&
+            typeof body === 'object' &&
+            'modelPath' in body &&
+            typeof (body as { modelPath: unknown }).modelPath === 'string'
+              ? (body as { modelPath: string }).modelPath
+              : null;
+
+          if (modelPath === null || modelPath === '') {
+            return new Response(
+              JSON.stringify({ error: 'Missing or invalid "modelPath" field' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
+          const target =
+            body !== null &&
+            typeof body === 'object' &&
+            'target' in body &&
+            (body as { target: unknown }).target === 'analysis'
+              ? 'analysis'
+              : 'main';
+
+          try {
+            const applied = await bridge.switchModel(modelPath, target);
+            return new Response(
+              JSON.stringify({ ok: true, modelPath: applied, target }),
+              {
+                status: 200,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            return new Response(JSON.stringify({ error: message }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+        }
+
         if (bridge.isEngineDead()) {
           return new Response(
             JSON.stringify({ error: '엔진 연결 실패' }),

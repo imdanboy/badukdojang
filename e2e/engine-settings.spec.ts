@@ -20,7 +20,12 @@ async function getStoredSettings(page: Page): Promise<Record<string, unknown>> {
 }
 
 test.describe('EngineSettings E2E', () => {
+  let currentModelPath: string
+  let currentAnalysisModelPath: string
+
   test.beforeEach(async ({ page }) => {
+    currentModelPath = '/models/kata1-b18c384nbt.bin.gz'
+    currentAnalysisModelPath = '/models/kata1-b18c384nbt.bin.gz'
     await page.route('/api/gtp/health', async (route) => {
       await route.fulfill({
         status: 200,
@@ -34,6 +39,43 @@ test.describe('EngineSettings E2E', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ response: '' }),
+      })
+    })
+
+    await page.route('/api/gtp/models', async (route) => {
+      const models = [
+        '/models/kata1-b18c384nbt.bin.gz',
+        '/models/g170e-b15c192-s1672170752-d466197061.bin.gz',
+      ]
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          currentModelPath,
+          currentAnalysisModelPath,
+          models: models.map((path) => ({
+            name: path.split('/').pop(),
+            path,
+            current: path === currentModelPath,
+          })),
+        }),
+      })
+    })
+
+    await page.route('/api/gtp/model', async (route) => {
+      const body = route.request().postDataJSON() as {
+        modelPath: string
+        target?: string
+      }
+      if (body.target === 'analysis') {
+        currentAnalysisModelPath = body.modelPath
+      } else {
+        currentModelPath = body.modelPath
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, modelPath: body.modelPath }),
       })
     })
 
@@ -268,5 +310,58 @@ test.describe('EngineSettings E2E', () => {
     expect(stored2['difficulty']).toBe(1)
 
     await screenshot(page, 'bounds-clamped')
+  })
+
+  test('(k) model selector lists models with absolute path and switches', async ({
+    page,
+  }) => {
+    const select = page.locator('#engine-model-select')
+    await expect(select).toBeVisible()
+
+    // Two mocked model files are listed by filename
+    const options = page.locator('#engine-model-select option')
+    await expect(options).toHaveCount(2)
+    await expect(options.nth(0)).toContainText('kata1-b18c384nbt.bin.gz')
+    await expect(options.nth(1)).toContainText('g170e-b15c192')
+
+    // Absolute path of the currently loaded model is displayed
+    const pathLabel = page.locator('#engine-model-path')
+    await expect(pathLabel).toContainText('/models/kata1-b18c384nbt.bin.gz')
+    await expect(select).toHaveValue('/models/kata1-b18c384nbt.bin.gz')
+
+    // Switch to the smaller model — the bridge restarts, path label updates
+    await select.selectOption('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+    await expect(pathLabel).toContainText('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+    await expect(select).toHaveValue('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+
+    await screenshot(page, 'model-switched')
+  })
+
+  test('(l) analysis tab has its own model selector that switches only analysis', async ({
+    page,
+  }) => {
+    // Switch to the 분석 tab
+    await page.locator('#settings-tab-analysis').click()
+    const panel = page.locator('#analysis-settings-panel')
+    await expect(panel).toBeVisible()
+
+    const select = page.locator('#analysis-model-select')
+    await expect(select).toBeVisible()
+
+    // The analysis model tracks the main model until independently switched
+    await expect(select).toHaveValue('/models/kata1-b18c384nbt.bin.gz')
+    const pathLabel = page.locator('#analysis-model-path')
+    await expect(pathLabel).toContainText('/models/kata1-b18c384nbt.bin.gz')
+
+    // Switch analysis to the light model — play engine unaffected
+    await select.selectOption('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+    await expect(pathLabel).toContainText('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+    await expect(select).toHaveValue('/models/g170e-b15c192-s1672170752-d466197061.bin.gz')
+
+    // The engine tab's main model selector is unchanged
+    await page.locator('#settings-tab-engine').click()
+    await expect(page.locator('#engine-model-path')).toContainText('/models/kata1-b18c384nbt.bin.gz')
+
+    await screenshot(page, 'analysis-model-switched')
   })
 })

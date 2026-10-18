@@ -3,6 +3,7 @@
  * Controls engine ON/OFF, thinking time, difficulty, temperature, rules,
  * play style, and the advanced KataGo knobs. All state flows through the
  * controlled `settings` prop; persistence happens in useEngine.
+ * The model picker switches the main (play) engine model.
  */
 import { useState } from 'react'
 import {
@@ -26,6 +27,7 @@ import {
   RULES_LABELS,
 } from '../lib/engineSettings.ts'
 import type { EngineSettings, HumanSLProfile, Rules } from '../lib/engineSettings.ts'
+import { ModelSelector } from './ModelSelector.tsx'
 
 // Compact list offered in the Advanced dropdown. KataGo supports many more
 // (rank_*, preaz_*, proyear_*); all kyu/dan buckets suffice for tuning.
@@ -38,6 +40,8 @@ export interface EngineSettingsFormProps {
   settings: EngineSettings
   onChange: (settings: EngineSettings) => void
   humanModelAvailable?: boolean | null | undefined
+  /** Called after a successful model switch so the engine can be re-initialized. */
+  onModelChanged?: (() => void | Promise<void>) | undefined
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -90,6 +94,7 @@ export function EngineSettingsForm({
   settings,
   onChange,
   humanModelAvailable,
+  onModelChanged,
 }: EngineSettingsFormProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -310,6 +315,9 @@ export function EngineSettingsForm({
           maxVisits: {settings.maxVisits}
         </span>
       </div>
+
+      {/* Model selector — bridge-scanned files, switching respawns the engine */}
+      <ModelSelector target="main" onModelChanged={onModelChanged} />
 
       {showHumanModelWarning && (
         <div
