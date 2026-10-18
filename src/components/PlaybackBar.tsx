@@ -2,8 +2,10 @@
  * PlaybackBar — move navigation under the board (OGS action-bar style).
  * |◀ ◀ ▶ ▶| plus the current move counter. First/prev use undo,
  * next/last use redo semantics from GameState.
+ * Keyboard: ←/→ arrows mirror the prev/next buttons (ignored while
+ * typing in form fields).
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { GameState } from '../lib/gameState.ts'
 import { getMoveList } from '../lib/gameTree.ts'
 
@@ -48,6 +50,35 @@ export function PlaybackBar({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, moveVersion])
+
+  // ←/→ mirror the prev/next buttons. Skipped while the focus is inside a
+  // form control (inputs, sliders, selects) so arrow keys keep their
+  // native editing/stepping behavior.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      if (
+        target !== null &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        if (isAtRoot) return
+        e.preventDefault()
+        onPrev()
+      } else if (e.key === 'ArrowRight') {
+        if (isAtLeaf) return
+        e.preventDefault()
+        onNext()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isAtRoot, isAtLeaf, onPrev, onNext])
 
   return (
     <div

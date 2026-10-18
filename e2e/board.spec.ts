@@ -136,6 +136,34 @@ test.describe('Board E2E', () => {
     await screenshot(page, 'redo')
   })
 
+  test('(f2) arrow keys navigate to prev/next move', async ({ page }) => {
+    // Two stones on the board
+    await clickVertex(page, 3, 3, 19)
+    await clickVertex(page, 4, 4, 19)
+    await page.waitForTimeout(200)
+
+    const stones = page.locator('.shudan-stone')
+    await expect(stones).toHaveCount(2)
+
+    // ← rewinds one move
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(200)
+    await expect(stones).toHaveCount(1)
+
+    // → replays it
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(200)
+    await expect(stones).toHaveCount(2)
+
+    // ← at root of two: one more left reaches empty board
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(200)
+    await expect(stones).toHaveCount(0)
+
+    await screenshot(page, 'keyboard-nav')
+  })
+
   test('(g) pass flips turn indicator', async ({ page }) => {
     const turnIndicator = page.locator('text=To Play:')
     await expect(turnIndicator).toContainText('Black')
