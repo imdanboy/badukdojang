@@ -36,8 +36,11 @@ import { getMoveList } from './lib/gameTree.ts'
 import {
   downloadSGF,
   getBoardSizeFromTree,
+  getAnalysisMetadataFromTree,
   loadSGFFile,
 } from './lib/sgfIo.ts'
+import type { SgfAnalysisEmbed } from './lib/sgfIo.ts'
+import type { AnalysisMetadata } from './lib/analysisSgf.ts'
 import {
   playStoneSound,
   playCaptureSound,
@@ -96,6 +99,7 @@ export function App() {
     analysisSettings,
     setAnalysisSettings,
     humanModelAvailable,
+    engineVersion,
     engineError,
     setEngineError,
     isRestarting,
@@ -104,6 +108,28 @@ export function App() {
     getLightAnalysisSettings,
     ANALYSIS_TIMEOUT,
   } = useEngine({ boardSize, showToast })
+
+  // --- Analysis model identity ------------------------------------------------
+  // Names of the loaded play/analysis models (from the bridge). Used for the
+  // analysis cache context and for KAM provenance metadata on SGF save.
+  const [playModelPath, setPlayModelPath] = useState<string | null>(null)
+  const [analysisModelPath, setAnalysisModelPath] = useState<string | null>(null)
+  // Provenance metadata read from a loaded SGF's KAM property (or null).
+  const [analysisMetadata, setAnalysisMetadata] = useState<AnalysisMetadata | null>(null)
+
+  const refreshModelPaths = useCallback(async () => {
+    try {
+      const result = await katagoAdapter.listModels()
+      setPlayModelPath(result.currentModelPath)
+      setAnalysisModelPath(result.currentAnalysisModelPath)
+    } catch {
+      // Bridge offline — cache keys just lack model identity until it's up.
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshModelPaths()
+  }, [refreshModelPaths])
 
   // --- Analysis polling -----------------------------------------------------
   const analysisEnabled =
@@ -118,12 +144,14 @@ export function App() {
     ownership,
     policy,
     analysisDurationMs,
+    analysisCacheRef,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
     enabled: analysisEnabled,
     signMap,
     gameState,
     getLightAnalysisSettings,
+    analysisModelPath,
     timeoutMs: ANALYSIS_TIMEOUT,
   })
 
@@ -409,6 +437,7 @@ export function App() {
   const handleNewGame = useCallback(() => {
     abortAiAndReset()
     setAiMoveStats(null)
+    setAnalysisMetadata(null)
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
@@ -423,6 +452,7 @@ export function App() {
     )
     abortAiAndReset()
     setAiMoveStats(null)
+    setAnalysisMetadata(null)
     const newGameState = createGameState(config.size)
       setGameState(newGameState)
       setSignMap(newGameState.getSignMap())
@@ -477,7 +507,28 @@ export function App() {
 
   const handleSaveSGF = () => {
     const filename = `game-${Date.now()}.sgf`
-    downloadSGF(gameState.gameTree, filename, boardSize)
+    const basename = (p: string | null): string =>
+      p === null ? '' : (p.split('/').pop() ?? p)
+    // Embed whatever analysis this session holds (or preserves a loaded
+    // file's own KA/KAM) so saved games reopen with their analysis intact.
+    const embed: SgfAnalysisEmbed | undefined =
+      analysisCacheRef.current.size > 0 || analysisMetadata !== null
+        ? {
+            analysisByNodeId: analysisCacheRef.current,
+            metadata: analysisMetadata ?? {
+              engine: engineVersion ?? '',
+              model: basename(playModelPath),
+              analysisModel: basename(analysisModelPath),
+              maxVisits: analysisSettings.maxVisits,
+              maxTime: analysisSettings.maxTime,
+              numSearchThreads: analysisSettings.numSearchThreads,
+              komi: engineSettings.rules === 'chinese' ? 7.5 : 6.5,
+              rules: engineSettings.rules,
+              date: new Date().toISOString(),
+            },
+          }
+        : undefined
+    downloadSGF(gameState.gameTree, filename, boardSize, embed)
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -500,6 +551,7 @@ export function App() {
       setGameState(newGameState)
       setSignMap(newGameState.getSignMap())
       setMoveVersion((v) => v + 1)
+      setAnalysisMetadata(getAnalysisMetadataFromTree(newGameState.gameTree))
     } catch (error) {
       console.error('Failed to load SGF:', error)
     } finally {
@@ -514,6 +566,12 @@ export function App() {
     setSoundEnabled(next)
     setSoundEnabledState(next)
   }
+
+  /** Main-model switch: re-init engine params, then refresh model identity. */
+  const handleMainModelChanged = useCallback(async () => {
+    await handleRestartEngine()
+    await refreshModelPaths()
+  }, [handleRestartEngine, refreshModelPaths])
 
   const handleGameModeChange = (mode: GameMode) => {
     if (mode === gameMode) return
@@ -641,6 +699,7 @@ export function App() {
               engineEnabled={engineSettings.enabled}
               analysisDurationMs={analysisDurationMs}
               analysisSettings={analysisSettings}
+              analysisMetadata={analysisMetadata}
             />
           )}
         </div>
@@ -653,7 +712,8 @@ export function App() {
           analysisSettings={analysisSettings}
           onAnalysisSettingsChange={setAnalysisSettings}
           humanModelAvailable={humanModelAvailable}
-          onModelChanged={handleRestartEngine}
+          onModelChanged={handleMainModelChanged}
+          onAnalysisModelChanged={refreshModelPaths}
           showCoordinates={showCoordinates}
           onToggleCoordinates={() => setShowCoordinates((prev) => !prev)}
         />

@@ -13,6 +13,8 @@ import { ModelSelector } from './ModelSelector.tsx'
 interface AnalysisSettingsFormProps {
   settings: AnalysisSettings
   onChange: (settings: AnalysisSettings) => void
+  /** Notifies the app after an analysis-model switch. */
+  onModelChanged?: (() => void | Promise<void>) | undefined
 }
 
 const rowStyle: React.CSSProperties = {
@@ -32,7 +34,11 @@ const inputStyle: React.CSSProperties = {
   fontSize: '14px',
 }
 
-export function AnalysisSettingsForm({ settings, onChange }: AnalysisSettingsFormProps) {
+export function AnalysisSettingsForm({
+  settings,
+  onChange,
+  onModelChanged,
+}: AnalysisSettingsFormProps) {
   const update = (patch: Partial<AnalysisSettings>) => {
     onChange(normalizeAnalysisSettings({ ...settings, ...patch }))
   }
@@ -47,7 +53,7 @@ export function AnalysisSettingsForm({ settings, onChange }: AnalysisSettingsFor
       </div>
       {/* Analysis-dedicated model — switching respawns only the analysis
           engine, so the play engine keeps its (stronger) model. */}
-      <ModelSelector target="analysis" />
+      <ModelSelector target="analysis" onModelChanged={onModelChanged} />
       <div style={{ opacity: 0.55, fontSize: '11px', lineHeight: 1.4 }}>
         분석 전용 모델입니다. 대국 엔진과 다른 가벼운 모델(b10/b15)을 고르면
         매 수 형세 분석이 빨라지고 발열이 줄어듭니다.

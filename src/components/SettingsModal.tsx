@@ -19,8 +19,10 @@ export interface SettingsModalProps {
   analysisSettings: AnalysisSettings
   onAnalysisSettingsChange: (settings: AnalysisSettings) => void
   humanModelAvailable?: boolean | null
-  /** Re-initializes the engine after a model switch (bridge respawns processes). */
+  /** Re-initializes the engine after a main model switch (bridge respawns processes). */
   onModelChanged?: (() => void | Promise<void>) | undefined
+  /** Notifies the app after an analysis-model switch (model identity refresh). */
+  onAnalysisModelChanged?: (() => void | Promise<void>) | undefined
   showCoordinates: boolean
   onToggleCoordinates: () => void
 }
@@ -132,6 +134,7 @@ export function SettingsModal({
   onAnalysisSettingsChange,
   humanModelAvailable,
   onModelChanged,
+  onAnalysisModelChanged,
   showCoordinates,
   onToggleCoordinates,
 }: SettingsModalProps) {
@@ -189,6 +192,7 @@ export function SettingsModal({
         <AnalysisSettingsForm
           settings={analysisSettings}
           onChange={onAnalysisSettingsChange}
+          onModelChanged={onAnalysisModelChanged}
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

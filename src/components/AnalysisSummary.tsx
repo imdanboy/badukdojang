@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { AnalyzeResponse } from '../lib/engine/types.ts'
 import type { AnalysisSettings } from '../lib/engineSettings.ts'
+import type { AnalysisMetadata } from '../lib/analysisSgf.ts'
 
 interface AnalysisSummaryProps {
   analysis: AnalyzeResponse | null
@@ -8,6 +9,8 @@ interface AnalysisSummaryProps {
   error: string | null
   durationMs: number | null
   settings: AnalysisSettings
+  /** Provenance of an SGF-embedded analysis run (KAM), if present. */
+  metadata?: AnalysisMetadata | null | undefined
 }
 
 const panelStyle: React.CSSProperties = {
@@ -49,10 +52,31 @@ export function AnalysisSummary({
   error,
   durationMs,
   settings,
+  metadata,
 }: AnalysisSummaryProps) {
   return (
     <div style={panelStyle} id="analysis-summary">
       <span style={titleStyle}>분석 요약</span>
+      {metadata !== null && metadata !== undefined && (
+        <div
+          id="analysis-metadata"
+          style={{
+            fontSize: '11px',
+            lineHeight: 1.5,
+            opacity: 0.75,
+            background: '#16162a',
+            borderRadius: '4px',
+            padding: '6px 8px',
+          }}
+        >
+          불러온 분석 — 모델: {metadata.analysisModel || '알 수 없음'}
+          {metadata.maxVisits > 0 && ` · 방문 한도 ${metadata.maxVisits.toLocaleString()}`}
+          {metadata.date !== '' && ` · ${metadata.date.slice(0, 10)}`}
+          <br />
+          엔진 {metadata.engine || '알 수 없음'}
+          {metadata.numSearchThreads > 0 && ` · 스레드 ${metadata.numSearchThreads}`}
+        </div>
+      )}
       <div style={rowStyle}>
         <span>분석 시간</span>
         <span>{formatDuration(durationMs)}</span>

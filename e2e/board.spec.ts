@@ -205,6 +205,26 @@ test.describe('Board E2E', () => {
     await screenshot(page, 'load-sgf')
   })
 
+  test('(i2) load SGF with KA/KAM shows analysis provenance', async ({ page }) => {
+    const fileInput = page.locator('input[type="file"]')
+    await fileInput.setInputFiles('e2e/fixtures/test-game-analysis.sgf')
+    await page.waitForTimeout(500)
+
+    // Board restored (5 moves)
+    const stones = page.locator('.shudan-stone')
+    await expect(stones).toHaveCount(5)
+
+    // Provenance line appears in the analysis summary
+    await page.locator('#analysis-summary-toggle').click()
+    const summary = page.locator('#analysis-summary')
+    await expect(summary).toBeVisible()
+    await expect(summary).toContainText('불러온 분석')
+    await expect(summary).toContainText('b15.bin.gz')
+    await expect(summary).toContainText('방문 한도 80')
+
+    await screenshot(page, 'load-sgf-analysis-metadata')
+  })
+
   test('(j) toggle coordinates hides and shows labels', async ({ page }) => {
     const coordX = page.locator('.shudan-coord-x')
     const coordY = page.locator('.shudan-coord-y')
@@ -234,8 +254,7 @@ test.describe('Board E2E', () => {
     await screenshot(page, 'toggle-coords')
   })
 
-  test('(k) placing on occupied point does not add a second stone', async ({ page }) => {
-    await clickVertex(page, 3, 3, 19)
+  test('(k) placing on occupied point does not add a second stone', async ({ page }) => {    await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
 
     let stones = page.locator('.shudan-stone')

@@ -12,6 +12,7 @@ import { AiAnalysisPanel } from './AiAnalysisPanel.tsx'
 import type { AiMoveStats } from './AiAnalysisPanel.tsx'
 import type { AnalyzeResponse } from '../lib/engine/types.ts'
 import type { AnalysisSettings } from '../lib/engineSettings.ts'
+import type { AnalysisMetadata } from '../lib/analysisSgf.ts'
 import type { GameState } from '../lib/gameState.ts'
 import type { GameMode } from '../lib/types.ts'
 
@@ -50,6 +51,8 @@ export interface GameSidebarProps {
   engineEnabled: boolean
   analysisDurationMs: number | null
   analysisSettings: AnalysisSettings
+  /** Provenance of an SGF-embedded analysis run (KAM), if loaded. */
+  analysisMetadata?: AnalysisMetadata | null | undefined
 }
 
 const btnStyle = (disabled: boolean): React.CSSProperties => ({
@@ -179,6 +182,7 @@ export function GameSidebar({
   analysisError,
   analysisDurationMs,
   analysisSettings,
+  analysisMetadata,
   engineEnabled,
 }: GameSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -402,6 +406,7 @@ export function GameSidebar({
           error={analysisError}
           durationMs={analysisDurationMs}
           settings={analysisSettings}
+          metadata={analysisMetadata}
         />
       )}
 

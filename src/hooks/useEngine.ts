@@ -29,6 +29,7 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
     loadAnalysisSettings(),
   )
   const [humanModelAvailable, setHumanModelAvailable] = useState<boolean | null>(null)
+  const [engineVersion, setEngineVersion] = useState<string | null>(null)
   const [engineError, setEngineError] = useState<EngineError | null>(null)
   const [isRestarting, setIsRestarting] = useState(false)
   const engineInitializedRef = useRef(false)
@@ -79,6 +80,13 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
     try {
       await katagoAdapter.restartEngine(getAnalysisSettings())
       setEngineError(null)
+      // Refresh the version stamp — it names the loaded model(s) and is
+      // used as analysis provenance (KAM metadata).
+      try {
+        const health = await katagoAdapter.checkHealth()
+        setEngineVersion(health.version ?? null)
+        setHumanModelAvailable(health.humanModelAvailable ?? null)
+      } catch { /* keep previous stamp */ }
       showToast('엔진이 재시작되었습니다.')
     } catch (err) {
       showToast(
@@ -96,6 +104,7 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
       try {
         const health = await katagoAdapter.checkHealth()
         setHumanModelAvailable(health.humanModelAvailable ?? false)
+        setEngineVersion(health.version ?? null)
         if (engineSettings.enabled && health.status === 'ok') {
           await katagoAdapter.initializeEngine(getAnalysisSettings())
           engineInitializedRef.current = true
@@ -216,6 +225,7 @@ export function useEngine({ boardSize, showToast }: UseEngineOptions) {
     analysisSettings,
     setAnalysisSettings,
     humanModelAvailable,
+    engineVersion,
     engineError,
     setEngineError,
     isRestarting,

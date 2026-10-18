@@ -8,11 +8,13 @@ import {
 } from './gameTree.ts'
 import {
   downloadSGF,
+  getAnalysisMetadataFromTree,
   getBoardSizeFromTree,
   loadSGFFile,
   sgfToTree,
   treeToSGF,
 } from './sgfIo.ts'
+import { analysisFromKa } from './analysisSgf.ts'
 
 describe('sgfIo', () => {
   test('treeToSGF produces FF[4] compliant SGF', () => {
@@ -50,6 +52,57 @@ describe('sgfIo', () => {
     expect(tree.root.data.SZ).toEqual(['19'])
     expect(tree.root.children.length).toBe(1)
     expect(tree.root.children[0]!.data.B).toEqual(['dd'])
+  })
+
+  test('KA/KAM embed round-trips through save and load', () => {
+    let tree = createGameTree(19)
+    tree = appendMove(tree, [3, 3], 1)
+    tree = appendMove(tree, [4, 4], -1)
+    tree = appendMove(tree, [5, 5], 1)
+
+    // Find node ids for the first and second moves.
+    const firstNodeId = String(tree.root.children[0]!.id)
+    const secondNodeId = String(tree.root.children[0]!.children[0]!.id)
+
+    const analysis = {
+      id: 'x',
+      winrate: 0.55,
+      scoreLead: 2.5,
+      visits: 80,
+      ownership: [0.9, -0.9],
+      bestMoves: [{ move: 'Q16', visits: 50, winrate: 0.56, scoreLead: 2.6 }],
+    }
+    const metadata = {
+      engine: '1.16.4+b18c384nbt',
+      model: 'main.bin.gz',
+      analysisModel: 'b15.bin.gz',
+      maxVisits: 80,
+      maxTime: 2,
+      numSearchThreads: 2,
+      komi: 6.5,
+      rules: 'korean',
+      date: '2026-10-18T00:00:00.000Z',
+    }
+
+    const sgf = treeToSGF(tree, 19, {
+      analysisByNodeId: new Map([
+        [firstNodeId, { analysis, durationMs: 123 }],
+        [secondNodeId, { analysis, durationMs: null }],
+      ]),
+      metadata,
+    })
+    expect(sgf).toContain('KA[')
+    expect(sgf).toContain('KAM[')
+
+    // Reload and verify the KA/KAM content is readable off the nodes.
+    const loaded = sgfToTree(sgf)
+    const loadedKa = (loaded.root.children[0]!.data as { KA?: string[] }).KA?.[0]
+    expect(loadedKa).toBeDefined()
+    const restored = analysisFromKa(loadedKa)
+    expect(restored).not.toBeNull()
+    expect(restored!.winrate).toBeCloseTo(0.55, 3)
+    expect(restored!.visits).toBe(80)
+    expect(getAnalysisMetadataFromTree(loaded)).toEqual(metadata)
   })
 
   test('SGF round-trip preserves game state', () => {
