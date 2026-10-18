@@ -10,11 +10,14 @@ import { AnalysisPanel } from './AnalysisPanel.tsx'
 import { AnalysisSummary } from './AnalysisSummary.tsx'
 import { AiAnalysisPanel } from './AiAnalysisPanel.tsx'
 import type { AiMoveStats } from './AiAnalysisPanel.tsx'
+import { CandidateMoves } from './CandidateMoves.tsx'
+import type { CandidateMove } from './CandidateMoves.tsx'
 import type { AnalyzeResponse } from '../lib/engine/types.ts'
 import type { AnalysisSettings } from '../lib/engineSettings.ts'
 import type { AnalysisMetadata } from '../lib/analysisSgf.ts'
 import type { GameState } from '../lib/gameState.ts'
 import type { GameMode } from '../lib/types.ts'
+import type { Vertex } from '@kaya/goboard'
 
 export interface GameSidebarProps {
   gameState: GameState
@@ -53,6 +56,10 @@ export interface GameSidebarProps {
   analysisSettings: AnalysisSettings
   /** Provenance of an SGF-embedded analysis run (KAM), if loaded. */
   analysisMetadata?: AnalysisMetadata | null | undefined
+  /** Top candidate moves (self-play study hints). */
+  candidates: readonly CandidateMove[]
+  /** Play a candidate move from the sidebar rows. */
+  onSelectCandidate: (vertex: Vertex | 'pass') => void
 }
 
 const btnStyle = (disabled: boolean): React.CSSProperties => ({
@@ -184,6 +191,8 @@ export function GameSidebar({
   analysisSettings,
   analysisMetadata,
   engineEnabled,
+  candidates,
+  onSelectCandidate,
 }: GameSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -395,6 +404,13 @@ export function GameSidebar({
             loading={analysisLoading}
             error={analysisError}
             engineEnabled={engineEnabled}
+          />
+        )}
+        {gameMode === 'selfplay' && showCandidates && (
+          <CandidateMoves
+            candidates={candidates}
+            onSelectMove={onSelectCandidate}
+            disabled={isAiThinking}
           />
         )}
       </div>

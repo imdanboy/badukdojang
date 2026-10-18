@@ -88,10 +88,10 @@ test.describe('Candidate Moves E2E', () => {
     // Analysis is on-demand: toggle Ownership to trigger the analysis fetch.
     await page.locator('#candidates-toggle').click()
 
-    // Wait for candidate markers to appear (letter labels on the board)
+    // Wait for candidate markers to appear (info circles on the board)
     await expect(async () => {
-      const labels = page.locator('.shudan-vertex .shudan-marker-label')
-      const count = await labels.count()
+      const markers = page.locator('.candidate-info-circle')
+      const count = await markers.count()
       expect(count).toBe(3)
     }).toPass({ timeout: 10000 })
 

@@ -420,6 +420,12 @@ export function App() {
     }
   }
 
+  const handleSelectCandidate = (vertex: Vertex | 'pass') => {
+    if (isAiThinkingRef.current) return
+    if (gameMode !== 'selfplay') return
+    applyMove(vertex)
+  }
+
   // --- Game lifecycle ---------------------------------------------------------
 
   const abortAiAndReset = useCallback(() => {
@@ -700,6 +706,8 @@ export function App() {
               analysisDurationMs={analysisDurationMs}
               analysisSettings={analysisSettings}
               analysisMetadata={analysisMetadata}
+              candidates={candidates}
+              onSelectCandidate={handleSelectCandidate}
             />
           )}
         </div>
