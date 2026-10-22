@@ -42,11 +42,12 @@ bun run --filter @kaya/sgf build
 bun run --filter @kaya/gametree build
 bun run --filter @kaya/themes build
 bun run --filter @kaya/shudan build
+bun run --filter @kaya/board-recognition build
 
 # 4. Link the Kaya packages into Bun's global registry so badukdojang can
 #    reference them with `link:` in package.json.
 echo "--> Linking Kaya packages into global Bun registry..."
-for pkg in goboard sgf gametree themes shudan; do
+for pkg in goboard sgf gametree themes shudan board-recognition; do
   (cd "$KAYA_DIR/packages/$pkg" && bun link)
 done
 

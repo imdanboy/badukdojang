@@ -35,6 +35,7 @@ export interface GameSidebarProps {
   onScore: () => void
   onSaveSGF: () => void
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onOpenScreenshot: () => void
   showWinrate: boolean
   onToggleWinrate: () => void
   showPolicy: boolean
@@ -171,6 +172,7 @@ export function GameSidebar({
   onScore,
   onSaveSGF,
   onFileChange,
+  onOpenScreenshot,
   showWinrate,
   onToggleWinrate,
   showPolicy,
@@ -296,6 +298,10 @@ export function GameSidebar({
         <span style={{ opacity: 0.3 }}>|</span>
         <button style={linkBtnStyle} onClick={handleLoadClick}>
           Load SGF
+        </button>
+        <span style={{ opacity: 0.3 }}>|</span>
+        <button style={linkBtnStyle} onClick={onOpenScreenshot}>
+          스크린샷
         </button>
         <input
           ref={fileInputRef as RefObject<HTMLInputElement>}

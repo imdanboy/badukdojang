@@ -52,6 +52,12 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
   }
 
   function deriveCurrentPlayer(): Player {
+    // PL property (다음 착수자) — 스크린샷 이어하기에서 사용자가 지정.
+    const rootData = gameTree.root.data as { PL?: string[] }
+    const pl = rootData.PL?.[0]
+    if (pl === 'B' || pl === 'W') {
+      return pl === 'B' ? 1 : -1
+    }
     const moves = getMoveList(gameTree)
     return moves.length % 2 === 0 ? 1 : -1
   }

@@ -1,5 +1,5 @@
 import { GoBoard } from '@kaya/goboard'
-import type { SignMap, Vertex } from '@kaya/goboard'
+import type { Sign, SignMap, Vertex } from '@kaya/goboard'
 import { GameTree } from '@kaya/gametree'
 import type { GameTreeNode, Primitive } from '@kaya/gametree'
 
@@ -107,6 +107,55 @@ export function redo(tree: GameTree): GameTree | null {
   return newTree
 }
 
+/** Setup 배치 (AB/AW 좌표 하나): 가드 없는 착점 + 실패 시 원판 반환. */
+function applySetup(board: GoBoard, sign: Sign, coord: string, size: number): GoBoard {
+  if (typeof coord !== 'string' || coord.length < 2) return board
+  const vertex = sgfToVertex(coord)
+  if (vertex[0] < 0 || vertex[0] >= size || vertex[1] < 0 || vertex[1] >= size) {
+    return board
+  }
+  try {
+    return board.makeMove(sign, vertex, {
+      preventOverwrite: true,
+      preventSuicide: false,
+      preventKo: false,
+    })
+  } catch {
+    return board
+  }
+}
+
+export interface SetupStone {
+  vertex: Vertex
+  sign: number
+}
+
+/**
+ * 현재 경로의 setup 돌(AB/AW) — root 부터 순서대로.
+ * 엔진(GTP) 재생용: 착수 목록과 별도로 setup 돌을 먼저 play 해야
+ * 스크린샷 이어하기 국면이 엔진에 전달된다.
+ */
+export function getSetupStones(tree: GameTree): SetupStone[] {
+  const currentId = tree.currentId ?? tree.root.id
+  const nodes = [...tree.listNodesVertically(currentId, -1, {})].reverse()
+
+  const stones: SetupStone[] = []
+  for (const node of nodes) {
+    const data = node.data as { AB?: string[]; AW?: string[] }
+    for (const coord of data.AB ?? []) {
+      if (typeof coord === 'string' && coord.length >= 2) {
+        stones.push({ vertex: sgfToVertex(coord), sign: 1 })
+      }
+    }
+    for (const coord of data.AW ?? []) {
+      if (typeof coord === 'string' && coord.length >= 2) {
+        stones.push({ vertex: sgfToVertex(coord), sign: -1 })
+      }
+    }
+  }
+  return stones
+}
+
 export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
   const currentId = tree.currentId ?? tree.root.id
   let board = GoBoard.fromDimensions(size, size)
@@ -114,9 +163,21 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
   const nodes = [...tree.listNodesVertically(currentId, -1, {})].reverse()
 
   for (const node of nodes) {
+    const data = node.data as { B?: string[]; W?: string[]; AB?: string[]; AW?: string[] }
+
+    // Setup properties (AB/AW) — 모든 값을 적용한다 (root 포함).
+    // 스크린샷 인식 등 임의 국면이 setup 으로 들어온다. 부분 재생 중 캡처는
+    // 일어나지 않는다: 최종 국면의 부분집합 재생에서는 어떤 그룹의 활기도
+    // 최종 국면 기준 하한 이하로 내려가지 않기 때문.
+    for (const coord of data.AB ?? []) {
+      board = applySetup(board, 1, coord, size)
+    }
+    for (const coord of data.AW ?? []) {
+      board = applySetup(board, -1, coord, size)
+    }
+
     if (node.id === tree.root.id) continue
 
-    const data = node.data as { B?: string[]; W?: string[] }
     const sign =
       data.B != null && data.B.length > 0 && data.B[0] !== ''
         ? 1

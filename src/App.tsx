@@ -21,6 +21,7 @@ import { PlaybackBar } from './components/PlaybackBar.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
 import { NewGameModal } from './components/NewGameModal.tsx'
 import type { NewGameConfig } from './components/NewGameModal.tsx'
+import { ScreenshotImportModal } from './components/ScreenshotImportModal.tsx'
 import { Toast } from './components/Toast.tsx'
 import { EngineErrorModal } from './components/EngineErrorModal.tsx'
 import { ScoringModal } from './components/ScoringModal.tsx'
@@ -38,8 +39,10 @@ import {
   getBoardSizeFromTree,
   getAnalysisMetadataFromTree,
   loadSGFFile,
+  sgfToTree,
 } from './lib/sgfIo.ts'
 import type { SgfAnalysisEmbed } from './lib/sgfIo.ts'
+import { withPlayerToPlay } from './lib/screenshotRecognition.ts'
 import type { AnalysisMetadata } from './lib/analysisSgf.ts'
 import {
   playStoneSound,
@@ -74,6 +77,7 @@ export function App() {
   const [aiMoveStats, setAiMoveStats] = useState<AiMoveStats | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
+  const [screenshotImportOpen, setScreenshotImportOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
 
   // --- AI game mode ---------------------------------------------------------
@@ -565,6 +569,37 @@ export function App() {
     }
   }
 
+  /** 스크린샷 인식 국면을 현재 대국 자리에 교체한다. */
+  const handleScreenshotImport = (sgf: string, size: number, nextTurn: 'B' | 'W') => {
+    const finalSgf = withPlayerToPlay(sgf, nextTurn)
+    try {
+      const loadedTree = sgfToTree(finalSgf)
+      const validSize: BoardSize = [9, 13, 19].includes(size) ? (size as BoardSize) : 19
+
+      const moveCount = getMoveList(gameState.gameTree).length
+      if (moveCount > 0) {
+        const confirmed = window.confirm(
+          '진행 중인 대국을 스크린샷 국면으로 교체합니다. 계속하시겠습니까?',
+        )
+        if (!confirmed) return
+      }
+
+      if (validSize !== boardSize) {
+        setBoardSize(validSize)
+      }
+      const newGameState = createGameState(validSize, loadedTree)
+      setGameState(newGameState)
+      setSignMap(newGameState.getSignMap())
+      setMoveVersion((v) => v + 1)
+      setAnalysisMetadata(getAnalysisMetadataFromTree(newGameState.gameTree))
+      setScreenshotImportOpen(false)
+      showToast('스크린샷에서 국면을 이어받았습니다.')
+    } catch (error) {
+      console.error('Failed to import screenshot:', error)
+      showToast('이어하기에 실패했습니다.')
+    }
+  }
+
   // --- Top bar handlers ---------------------------------------------------------
 
   const handleToggleSound = () => {
@@ -681,6 +716,7 @@ export function App() {
               onUndo={handleUndo}
               onRedo={handleRedo}
               onNewGameRequest={() => setNewGameOpen(true)}
+              onOpenScreenshot={() => setScreenshotImportOpen(true)}
               canScore={canScore}
               isScoring={isScoring}
               onScore={handleScore}
@@ -736,6 +772,14 @@ export function App() {
           playStyle={engineSettings.playStyle}
           onStart={handleStartNewGame}
         />
+
+        {screenshotImportOpen && (
+          <ScreenshotImportModal
+            title="스크린샷 이어하기"
+            onClose={() => setScreenshotImportOpen(false)}
+            onImport={handleScreenshotImport}
+          />
+        )}
 
         {computedScore !== null && (
           <ScoringModal

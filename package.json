@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@kaya/goboard": "link:@kaya/goboard",
+    "@kaya/board-recognition": "link:@kaya/board-recognition",
     "@kaya/gametree": "link:@kaya/gametree",
     "@kaya/sgf": "link:@kaya/sgf",
     "@kaya/shudan": "link:@kaya/shudan",

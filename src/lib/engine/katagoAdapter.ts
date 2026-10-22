@@ -1,4 +1,4 @@
-import { getMoveList } from '../gameTree.ts'
+import { getMoveList, getSetupStones } from '../gameTree.ts'
 import type { GameTree } from '../gameTree.ts'
 import type { Player } from '../gameState.ts'
 import { EngineError } from './types.ts'
@@ -43,6 +43,26 @@ export function formatGTPVertex(vertex: Vertex, boardSize: number): string {
     : String.fromCharCode('A'.charCodeAt(0) + x + 1)
   const row = boardSize - y
   return `${col}${row}`
+}
+
+/**
+ * GTP 재생용 착점 문자열 목록 — setup 돌(AB/AW)을 착수 앞에 붙인다.
+ * 스크린샷 이어하기 국면이 setup property 로 표현되므로, 착수 재생만으론
+ * 엔진에 빈 판이 전달된다. setup 재생은 부분집합 논증으로 캡처·자살이
+ * 일어나지 않는다 (gameTree.ts getCurrentSignMap 주석 참조).
+ */
+function gtpReplayMoves(gameTree: GameTree, boardSize: number): string[] {
+  const setup = getSetupStones(gameTree).map((s) => {
+    const color = s.sign === 1 ? 'B' : 'W'
+    return `${color} ${formatGTPVertex(s.vertex, boardSize)}`
+  })
+  const moves = getMoveList(gameTree).map((move) => {
+    const color = move.sign === 1 ? 'B' : 'W'
+    const vertex =
+      move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
+    return `${color} ${vertex}`
+  })
+  return [...setup, ...moves]
 }
 
 export function parseGTPVertex(gtp: string, boardSize: number): Vertex | 'pass' | 'resign' {
@@ -318,11 +338,10 @@ async function requestMoveGTP(
     }
   }
 
-  const moves = getMoveList(gameTree)
-  for (const move of moves) {
-    const c = move.sign === 1 ? 'B' : 'W'
-    const vertex = move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
-    await postJSON(`${API_BASE}/command`, { command: 'play', args: [c, vertex] })
+  const moves = gtpReplayMoves(gameTree, boardSize)
+  for (const mv of moves) {
+    const [color, vertex] = mv.split(' ')
+    await postJSON(`${API_BASE}/command`, { command: 'play', args: [color!, vertex!] })
   }
 
   const response = await postJSON<{ response: string; error?: string }>(
@@ -345,12 +364,7 @@ export async function requestAnalysis(
   timeoutMs = 30000,
 ): Promise<AnalyzeResponse> {
   const boardSize = settings.boardSize ?? 19
-  const moves = getMoveList(gameTree).map((move) => {
-    const color = move.sign === 1 ? 'B' : 'W'
-    const vertex =
-      move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
-    return `${color} ${vertex}`
-  })
+  const moves = gtpReplayMoves(gameTree, boardSize)
 
   const body: Record<string, unknown> = {
     boardSize,
@@ -393,7 +407,6 @@ export async function requestScoring(
   gameTree: GameTree,
   settings: EngineSettings,
 ): Promise<ScoringResult> {
-  const moves = getMoveList(gameTree)
   const boardSize = settings.boardSize ?? 19
 
   await postJSON(`${API_BASE}/command`, { command: 'clear_board', args: [] })
@@ -410,13 +423,11 @@ export async function requestScoring(
     args: [String(settings.komi)],
   })
 
-  for (const move of moves) {
-    const color = move.sign === 1 ? 'B' : 'W'
-    const vertex =
-      move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
+  for (const mv of gtpReplayMoves(gameTree, boardSize)) {
+    const [color, vertex] = mv.split(' ')
     await postJSON(`${API_BASE}/command`, {
       command: 'play',
-      args: [color, vertex],
+      args: [color!, vertex!],
     })
   }
 
@@ -529,11 +540,7 @@ export async function requestMovePolicyWeighted(
   settings: EngineSettings,
 ): Promise<Vertex | 'pass' | 'resign'> {
   const boardSize = settings.boardSize ?? 19
-  const moves = getMoveList(gameTree).map((move) => {
-    const color = move.sign === 1 ? 'B' : 'W'
-    const vertex = move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
-    return `${color} ${vertex}`
-  })
+  const moves = gtpReplayMoves(gameTree, boardSize)
 
   const body: Record<string, unknown> = {
     boardSize,
@@ -559,6 +566,9 @@ export async function requestMovePolicyWeighted(
   }
 
   const occupied = new Set<string>()
+  for (const s of getSetupStones(gameTree)) {
+    occupied.add(`${s.vertex[0]},${s.vertex[1]}`)
+  }
   for (const m of getMoveList(gameTree)) {
     if (m.vertex !== 'pass') {
       occupied.add(`${m.vertex[0]},${m.vertex[1]}`)
