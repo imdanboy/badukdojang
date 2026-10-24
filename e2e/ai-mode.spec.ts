@@ -171,12 +171,13 @@ test.describe('AI Mode E2E', () => {
     await screenshot(page, 'race-guard')
   })
 
-  test('(d) mode switch mid-game shows confirmation dialog', async ({
+  test('(d) mode switch preserves the game without confirmation', async ({
     page,
   }) => {
-    // Enable the engine before entering AI mode
-    await enableEngine(page)
-    await page.waitForTimeout(200)
+    let dialogShown = false
+    page.on('dialog', () => {
+      dialogShown = true
+    })
 
     // Start in self-play, place a stone
     await clickVertex(page, 3, 3, 19)
@@ -185,47 +186,45 @@ test.describe('AI Mode E2E', () => {
     let stones = page.locator('.shudan-stone')
     await expect(stones).toHaveCount(1)
 
-    // Set up dialog handler to dismiss
-    page.on('dialog', (dialog) => dialog.dismiss())
-
-    // Try to switch to AI mode
+    // Switch to AI mode — reset is only relevant for the engine
+    await enableEngine(page)
     await page.locator('#mode-ai').click()
+
+    // White to play + engine on: the AI answers immediately (still 2... the
+    // human stone + one AI stone), and no confirmation dialog fires.
+    await expect(async () => {
+      const count = await page.locator('.shudan-stone').count()
+      expect(count).toBe(2)
+    }).toPass({ timeout: 10000 })
+    expect(dialogShown).toBe(false)
+
+    // Back to self-play — the position is preserved
+    await page.locator('#mode-selfplay').click()
     await page.waitForTimeout(200)
+    await expect(page.locator('.shudan-stone')).toHaveCount(2)
+    expect(dialogShown).toBe(false)
 
-    // Stone should still be there (game not reset)
-    stones = page.locator('.shudan-stone')
-    await expect(stones).toHaveCount(1)
-
-    await screenshot(page, 'mode-switch-cancelled')
+    await screenshot(page, 'mode-switch-preserves-game')
   })
 
-  test('(e) confirming mode switch resets the game', async ({ page }) => {
-    // Enable the engine before entering AI mode
+  test('(e) entering AI mode on a Black-to-play position waits for the user', async ({ page }) => {
+    // Enable the engine before switching to AI mode
     await enableEngine(page)
     await page.waitForTimeout(200)
 
-    // Place a stone
+    // Place a stone then undo — Black to play, tree non-empty
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(200)
-
-    let stones = page.locator('.shudan-stone')
-    await expect(stones).toHaveCount(1)
-
-    // Accept the confirmation dialog
-    page.on('dialog', (dialog) => dialog.accept())
+    await page.locator('button:has-text("Undo")').click()
+    await page.waitForTimeout(200)
 
     await page.locator('#mode-ai').click()
     await page.waitForTimeout(500)
 
-    // Board should be empty after reset
-    stones = page.locator('.shudan-stone')
-    await expect(stones).toHaveCount(0)
+    // Black to play: the engine must NOT move on its own; the stone is kept
+    await expect(page.locator('.shudan-stone')).toHaveCount(0)
 
-    // Turn should be Black
-    const turnIndicator = page.locator('text=To Play:')
-    await expect(turnIndicator).toContainText('Black')
-
-    await screenshot(page, 'mode-switch-confirmed')
+    await screenshot(page, 'mode-switch-waits-for-user')
   })
 
   test('(f) AI Move button manually triggers engine move', async ({ page }) => {
@@ -393,16 +392,20 @@ test.describe('AI Mode E2E', () => {
     await clickVertex(page, 3, 3, 19)
     await page.waitForTimeout(300)
 
-    // Rapidly switch to self-play and back to AI (accepting reset dialogs)
-    page.on('dialog', (dialog) => dialog.accept())
+    // Rapidly switch to self-play and back to AI (no reset dialogs anymore)
     await page.locator('#mode-selfplay').click()
     await page.waitForTimeout(200)
     await page.locator('#mode-ai').click()
     await page.waitForTimeout(200)
 
-    // Board should be empty after reset
+    // The human stone is preserved (no reset); the in-flight AI request
+    // from the first switch was invalidated, so no extra stones beyond the
+    // AI's answer to the White-to-play entry can appear. Expect the human
+    // stone plus at most one AI move.
     const stones = page.locator('.shudan-stone')
-    await expect(stones).toHaveCount(0)
+    const count = await stones.count()
+    expect(count).toBeGreaterThanOrEqual(1)
+    expect(count).toBeLessThanOrEqual(2)
 
     // No ghost stones should remain (they would have shudan-ghost class)
     const ghosts = page.locator('.shudan-ghost')

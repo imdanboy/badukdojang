@@ -51,13 +51,26 @@ import {
   isSoundEnabled,
 } from './lib/sound.ts'
 import { applyDifficulty, applyPlayStyle } from './lib/engineSettings.ts'
+import {
+  clearActiveGame,
+  isBlankGame,
+  restoreActiveGame,
+  saveActiveGame,
+} from './lib/autosave.ts'
 import * as katagoAdapter from './lib/engine/katagoAdapter.ts'
 import { EngineError } from './lib/engine/types.ts'
 
 export function App() {
   // --- Game state -----------------------------------------------------------
-  const [boardSize, setBoardSize] = useState<BoardSize>(19)
-  const [gameState, setGameState] = useState<GameState>(() => createGameState(19))
+  // Boot restores the active-game recovery draft synchronously (sleep/tab
+  // reload keeps the game). The useState initializers run once during the
+  // first render, so the first autosave effect already sees the restored
+  // game and can never overwrite a valid draft with a blank board.
+  const [boot] = useState(() => restoreActiveGame())
+  const [boardSize, setBoardSize] = useState<BoardSize>(boot?.boardSize ?? 19)
+  const [gameState, setGameState] = useState<GameState>(() =>
+    boot?.gameState ?? createGameState(19),
+  )
   const [signMap, setSignMap] = useState<SignMap>(() => gameState.getSignMap())
   const [flashTrigger, setFlashTrigger] = useState(0)
   const [moveVersion, setMoveVersion] = useState(0)
@@ -81,7 +94,7 @@ export function App() {
   const [zenMode, setZenMode] = useState(false)
 
   // --- AI game mode ---------------------------------------------------------
-  const [gameMode, setGameMode] = useState<GameMode>('selfplay')
+  const [gameMode, setGameMode] = useState<GameMode>(boot?.gameMode ?? 'selfplay')
   const [isAiThinking, setIsAiThinking] = useState(false)
   const isAiThinkingRef = useRef(false)
   const gameGenerationRef = useRef(0)
@@ -184,11 +197,28 @@ export function App() {
   })
 
   // Re-initialize game state whenever the size changes (SGF load path).
+  // Skip the initial run: boot may have restored a draft, and a blank reset
+  // here would erase the restored game.
+  const bootSizedRef = useRef(false)
   useEffect(() => {
+    if (!bootSizedRef.current) {
+      bootSizedRef.current = true
+      return
+    }
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
   }, [boardSize])
+
+  // --- Active-game autosave ---------------------------------------------------
+  // Persist the draft after every tree change (move/pass/undo/redo/navigate)
+  // so a sleep-induced tab reload never loses the game. Blank games are
+  // skipped: booting with nothing to restore must not overwrite a valid
+  // saved draft with the initial empty state.
+  useEffect(() => {
+    if (isBlankGame(gameState.gameTree)) return
+    saveActiveGame(gameState.gameTree, { boardSize, gameMode })
+  }, [gameState.gameTree, gameState, boardSize, gameMode])
 
   // Auto-dismiss toast after 3 seconds.
   useEffect(() => {
@@ -443,24 +473,22 @@ export function App() {
     gameGenerationRef.current += 1
   }, [])
 
-  /** Hard reset to an empty board (keeps current size/mode). */
-  const handleNewGame = useCallback(() => {
-    abortAiAndReset()
-    setAiMoveStats(null)
-    setAnalysisMetadata(null)
-    const newGameState = createGameState(boardSize)
-    setGameState(newGameState)
-    setSignMap(newGameState.getSignMap())
-    setMoveVersion((v) => v + 1)
-  }, [abortAiAndReset, boardSize])
-
   /** New-game modal confirm: apply config, reset the board. */
   const handleStartNewGame = useCallback(
     (config: NewGameConfig) => {
+    // Never silently discard a non-empty active game — confirm first.
+    if (!isBlankGame(gameState.gameTree)) {
+      const confirmed = window.confirm(
+        '새 대국을 시작하면 현재 진행 중인 대국이 삭제됩니다. 계속하시겠습니까?',
+      )
+      if (!confirmed) return
+    }
     setEngineSettings((prev) =>
       applyPlayStyle(applyDifficulty(prev, config.difficulty), config.playStyle),
     )
     abortAiAndReset()
+    // A fresh game intentionally replaces the recovery draft.
+    clearActiveGame()
     setAiMoveStats(null)
     setAnalysisMetadata(null)
     const newGameState = createGameState(config.size)
@@ -474,7 +502,7 @@ export function App() {
       }
       setNewGameOpen(false)
     },
-    [abortAiAndReset, setEngineSettings, engineSettings.enabled, showToast],
+    [abortAiAndReset, gameState, setEngineSettings, engineSettings.enabled, showToast],
   )
 
   const handlePass = () => {
@@ -576,8 +604,7 @@ export function App() {
       const loadedTree = sgfToTree(finalSgf)
       const validSize: BoardSize = [9, 13, 19].includes(size) ? (size as BoardSize) : 19
 
-      const moveCount = getMoveList(gameState.gameTree).length
-      if (moveCount > 0) {
+      if (!isBlankGame(gameState.gameTree)) {
         const confirmed = window.confirm(
           '진행 중인 대국을 스크린샷 국면으로 교체합니다. 계속하시겠습니까?',
         )
@@ -614,26 +641,35 @@ export function App() {
     await refreshModelPaths()
   }, [handleRestartEngine, refreshModelPaths])
 
+  /**
+   * Mode switch keeps the exact game (tree/cursor/board) — only the play
+   * mode changes. Any in-flight AI request is aborted and invalidated (via
+   * a generation bump) so a late AI move cannot land after the switch; the
+   * last committed position is retained. Autosave keeps persisting the
+   * same tree with the new mode.
+   *
+   * AI convention: the user plays Black and the AI plays White. When
+   * entering AI mode on a White-to-play position the AI moves immediately;
+   * on a Black-to-play position it waits for the user's move.
+   */
   const handleGameModeChange = (mode: GameMode) => {
     if (mode === gameMode) return
     if (isAiThinkingRef.current) {
       void katagoAdapter.abortOngoing().catch(() => {})
     }
+    // Invalidate any in-flight AI request (late responses are ignored).
+    gameGenerationRef.current += 1
     isAiThinkingRef.current = false
     setIsAiThinking(false)
     setAiGhostVertex(null)
     setAiFlashVertex(null)
-    const moveCount = getMoveList(gameState.gameTree).length
-    if (moveCount > 0) {
-      const confirmed = window.confirm(
-        '게임을 변경하면 현재 진행 중인 대국이 초기화됩니다. 계속하시겠습니까?',
-      )
-      if (!confirmed) return
-      handleNewGame()
-    }
     setGameMode(mode)
-    if (mode === 'ai' && !engineSettings.enabled) {
-      showToast('엔진이 꺼져 있습니다. AI 대국을 위해 엔진을 켜주세요.')
+    if (mode === 'ai') {
+      if (!engineSettings.enabled) {
+        showToast('엔진이 꺼져 있습니다. AI 대국을 위해 엔진을 켜주세요.')
+      } else if (gameState.currentPlayer === -1) {
+        void triggerAiMove()
+      }
     }
   }
 

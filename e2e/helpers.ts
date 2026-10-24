@@ -15,8 +15,12 @@ export async function openSettings(page: Page): Promise<void> {
   await page.locator('#settings-button').click()
 }
 
-/** Start a new game from the sidebar button via the new-game modal. */
+/**
+ * Start a new game from the sidebar button via the new-game modal.
+ * Starting over a non-empty game asks for confirmation — accept it.
+ */
 export async function startNewGame(page: Page): Promise<void> {
+  page.on('dialog', (dialog) => dialog.accept())
   await page.locator('button:has-text("New Game")').click()
   await page.locator('#new-game-start').click()
 }

@@ -129,7 +129,7 @@ export function NewGameModal({
           style={btnStyle(draftMode === 'selfplay')}
           onClick={() => setDraftMode('selfplay')}
         >
-          혼자두기
+          놓아보기
         </button>
         <button
           type="button"

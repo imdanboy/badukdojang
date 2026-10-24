@@ -61,7 +61,7 @@ export function TopBar({
           style={modeBtnStyle(gameMode === 'selfplay')}
           onClick={() => onGameModeChange('selfplay')}
         >
-          혼자두기
+          놓아보기
         </button>
         <button
           id="mode-ai"
