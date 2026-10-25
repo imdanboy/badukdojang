@@ -77,6 +77,60 @@ export function createGameTree(_size: number): GameTree {
   return tree
 }
 
+/**
+ * Path of nodes from the root to the given node (inclusive), root first.
+ * Returns null when the node does not exist in the tree.
+ *
+ * Note: node resolution deliberately does NOT use tree.get(id) for ids that
+ * may have been stringified — GameTree.get compares ids strictly (`===`),
+ * so a string lookup of a numeric id fails AND poisons the node cache with
+ * a null entry. Structural search with String() comparison is safe for both.
+ */
+export function getPathNodes(
+  tree: GameTree,
+  nodeId: string | number,
+): GameTreeNode[] | null {
+  const node = findNodeById(tree, nodeId)
+  if (node == null) return null
+  const ancestors = [...tree.listNodesVertically(node.id, -1, {})]
+  ancestors.reverse()
+  return ancestors
+}
+
+/**
+ * Move the navigation cursor to an arbitrary node (tree-view navigation).
+ * Like undo/redo, returns a NEW tree (the input is never mutated) so React
+ * state updates and the autosave effect observe an identity change.
+ * Returns null when the node does not exist.
+ */
+export function navigateToNode(
+  tree: GameTree,
+  nodeId: string | number,
+): GameTree | null {
+  const node = findNodeById(tree, nodeId)
+  if (node == null) return null
+  const newTree = cloneTree(tree)
+  newTree.currentId = node.id
+  return newTree
+}
+
+/** Depth-first search by stringified id — type-safe alternative to tree.get. */
+export function findNodeById(
+  tree: GameTree,
+  nodeId: string | number,
+): GameTreeNode | null {
+  const target = String(nodeId)
+  const visit = (node: GameTreeNode): GameTreeNode | null => {
+    if (String(node.id) === target) return node
+    for (const child of node.children) {
+      const found = visit(child)
+      if (found != null) return found
+    }
+    return null
+  }
+  return visit(tree.root)
+}
+
 export function appendMove(
   tree: GameTree,
   vertex: Vertex,
@@ -282,4 +336,121 @@ export function getMoveList(
   }
 
   return moves
+}
+
+/**
+ * Move-number options for getMoveNumberMap.
+ */
+export interface MoveNumberOptions {
+  /**
+   * "여기부터" numbering: move nodes at/after this node are numbered 1, 2, …
+   * (the anchor's own move is 1; a root anchor makes the next move 1). The
+   * anchor must lie on the current path (root → cursor) — when the cursor
+   * leaves the anchor's subtree (off-path/sibling branch) NO labels are
+   * produced at all, so another branch can never be mislabeled from a stale
+   * anchor.
+   */
+  fromNodeId?: string | number | null
+}
+
+/**
+ * Move-number labels for the stones visible on the CURRENT branch (the
+ * path root → cursor). Review/놓아보기 numbering rules:
+ *   - every move node (B/W, including passes) advances the move counter,
+ *   - passes and setup stones (AB/AW) get NO label,
+ *   - a stone that has been captured is off the board → no label,
+ *   - a re-placed vertex shows the number of the move that last placed it.
+ * The result mirrors getCurrentSignMap's replay semantics exactly (illegal
+ * history moves are skipped), so a label always sits on a stone the board
+ * actually shows.
+ *
+ * Without options the whole path is numbered ("전체 번호" mode). With
+ * `fromNodeId` the counter starts at the anchor node; when the anchor is
+ * not on the current path the function returns null ("no labels").
+ */
+export function getMoveNumberMap(
+  tree: GameTree,
+  size: number,
+  options?: MoveNumberOptions,
+): (number | null)[][] | null {
+  const fromNodeId = options?.fromNodeId ?? null
+  const currentId = tree.currentId ?? tree.root.id
+  const nodes = [...tree.listNodesVertically(currentId, -1, {})].reverse()
+
+  const numbers: (number | null)[][] = Array.from({ length: size }, () =>
+    Array<number | null>(size).fill(null),
+  )
+  let board = GoBoard.fromDimensions(size, size)
+  let moveNumber = 0
+
+  // Anchor mode: numbering starts at the anchor node's index along the
+  // path; the nodes before it are still replayed (board state) but produce
+  // no labels or counter — numbering restarts at 1 from the anchor.
+  let anchorIndex = -1
+  if (fromNodeId != null) {
+    const target = String(fromNodeId)
+    anchorIndex = nodes.findIndex((node) => String(node.id) === target)
+    if (anchorIndex === -1) return null // anchor off the current path
+  }
+
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!
+    const numbering = fromNodeId == null || i >= anchorIndex
+    const data = node.data as { B?: string[]; W?: string[]; AB?: string[]; AW?: string[] }
+
+    for (const coord of data.AB ?? []) {
+      board = applySetup(board, 1, coord, size)
+    }
+    for (const coord of data.AW ?? []) {
+      board = applySetup(board, -1, coord, size)
+    }
+
+    if (node.id === tree.root.id) continue
+
+    // Move node? (B or W property present — including empty = pass.)
+    if (data.B === undefined && data.W === undefined) continue
+
+    if (numbering) moveNumber += 1
+
+    const isBlackMove = data.B !== undefined
+    const prop = isBlackMove ? data.B : data.W
+    if (prop == null || prop.length === 0 || prop[0] === '') {
+      continue // pass — counts, but carries no label
+    }
+
+    const sign = isBlackMove ? 1 : -1
+    const coord = prop[0]
+    if (typeof coord === 'string' && coord.length >= 2) {
+      const vertex = sgfToVertex(coord)
+      try {
+        board = board.makeMove(sign, vertex, {
+          preventOverwrite: true,
+          preventSuicide: false,
+          preventKo: false,
+        })
+        if (
+          numbering &&
+          vertex[0] >= 0 &&
+          vertex[0] < size &&
+          vertex[1] >= 0 &&
+          vertex[1] < size
+        ) {
+          numbers[vertex[1]]![vertex[0]] = moveNumber
+        }
+      } catch {
+        // Illegal move in history — skip (same as getCurrentSignMap).
+      }
+    }
+  }
+
+  // Only stones still on the board carry a label; captured points clear.
+  const signMap = board.signMap
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (signMap[y]?.[x] === 0) {
+        numbers[y]![x] = null
+      }
+    }
+  }
+  return numbers
 }

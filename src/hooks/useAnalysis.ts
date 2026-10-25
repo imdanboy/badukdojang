@@ -37,6 +37,12 @@ interface UseAnalysisOptions {
   /** Current analysis-engine model path — part of the run context (cache key). */
   analysisModelPath: string | null
   timeoutMs: number
+  /**
+   * Shared node-id-keyed cache. Pass one in when another consumer (the
+   * full-tree batch analysis) must read/write the same results; otherwise
+   * the hook owns its own map.
+   */
+  analysisCacheRef?: { current: Map<string, SgfAnalysisEntry> }
 }
 
 export function useAnalysis({
@@ -47,6 +53,7 @@ export function useAnalysis({
   getLightAnalysisSettings,
   analysisModelPath,
   timeoutMs,
+  analysisCacheRef: externalCacheRef,
 }: UseAnalysisOptions) {
   const [winrateAnalysis, setWinrateAnalysis] = useState<AnalyzeResponse | null>(null)
   const [winrateLoading, setWinrateLoading] = useState(false)
@@ -55,7 +62,8 @@ export function useAnalysis({
   const [ownership, setOwnership] = useState<readonly number[] | null>(null)
   const winrateReqRef = useRef(0)
   /** Node id → analysis result for the current game/settings/model context. */
-  const analysisCacheRef = useRef(new Map<string, SgfAnalysisEntry>())
+  const ownedCacheRef = useRef(new Map<string, SgfAnalysisEntry>())
+  const analysisCacheRef = externalCacheRef ?? ownedCacheRef
 
   const gameTree = gameState.gameTree
   const currentNodeId = String(gameTree.currentId ?? gameTree.root.id)

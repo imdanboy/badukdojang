@@ -1,7 +1,9 @@
 /*
- * PlaybackBar — move navigation under the board (OGS action-bar style).
- * |◀ ◀ ▶ ▶| plus the current move counter. First/prev use undo,
- * next/last use redo semantics from GameState.
+ * PlaybackBar — move navigation in the right-side function column
+ * (moved from under the board so the board can use the full vertical
+ * space). |◀ ◀ ▶ ▶| plus the current move counter. First/prev use undo,
+ * next/last use redo semantics from GameState. Buttons flex to fill the
+ * column width (large tap targets, also on narrow screens).
  * Keyboard: ←/→ arrows mirror the prev/next buttons (ignored while
  * typing in form fields).
  */
@@ -20,7 +22,7 @@ export interface PlaybackBarProps {
 }
 
 const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  padding: '6px 12px',
+  padding: '8px 0',
   border: 'none',
   borderRadius: '4px',
   cursor: disabled ? 'not-allowed' : 'pointer',
@@ -29,6 +31,7 @@ const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
   background: '#3b3b5c',
   color: '#e0e0e0',
   lineHeight: 1,
+  flex: '1 1 0',
 })
 
 export function PlaybackBar({

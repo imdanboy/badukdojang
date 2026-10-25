@@ -6,6 +6,7 @@ import {
   createGameTree,
   getCurrentSignMap,
   getMoveList,
+  navigateToNode as navigateTreeToNode,
   redo as redoTree,
   undo as undoTree,
 } from './gameTree.ts'
@@ -27,6 +28,12 @@ export interface GameState {
   jumpToStart(): boolean
   /** Navigate forward to the last move of the current branch. Returns true if changed. */
   jumpToEnd(): boolean
+  /**
+   * Jump the navigation cursor to an arbitrary tree node (game-tree view).
+   * Rebuilds board/turn/last-move from the node's path. Returns false when
+   * the node does not exist.
+   */
+  navigateToNode(nodeId: string): boolean
 }
 
 export function createGameState(size: number, initialTree?: GameTree): GameState {
@@ -126,6 +133,16 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     return changed
   }
 
+  function navigateToNode(nodeId: string): boolean {
+    const newTree = navigateTreeToNode(gameTree, nodeId)
+    if (newTree == null) return false
+    gameTree = newTree
+    syncFromTree()
+    lastMove = deriveLastMove()
+    currentPlayer = deriveCurrentPlayer()
+    return true
+  }
+
   function getSignMap(): SignMap {
     return board.signMap
   }
@@ -150,5 +167,6 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     redo,
     jumpToStart,
     jumpToEnd,
+    navigateToNode,
   }
 }

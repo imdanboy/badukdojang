@@ -1,6 +1,6 @@
 /*
  * badukdojang - global styles.
- * Layout structure (top bar, 2-column game layout, modals, zen mode)
+ * Layout structure (top bar, three-column game layout, modals, zen mode)
  * lives here as classes; component internals use inline styles.
  */
 
@@ -53,7 +53,9 @@ body {
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 1280px;
+  /* Wide on desktop so the height budget (not width) sizes the board.
+     Falls back naturally to full width on smaller screens. */
+  max-width: 1720px;
   margin: 0 auto;
   min-height: 100svh;
   padding: 12px 16px 20px;
@@ -105,14 +107,80 @@ body {
   gap: 6px;
 }
 
-/* --- Game layout (center board column + sidebar) ----------------------------- */
-
+/* --- Game layout (rail | board | functions) ----------------------------------
+ *
+ * Default (narrow / mobile portrait): single column — board first, then the
+ * right column (playback + primary actions) directly below the board, so
+ * every control stays reachable without overflow.
+ *
+ * ≥1024px (desktop / tablet landscape): three columns — a reserved narrow
+ * left rail (content TBD, intentionally empty), the board column that takes
+ * the remaining space, and the function column (playback + sidebar).
+ */
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  /* minmax(0, 1fr): the board column must never push the track wider than
+     the viewport (a plain 1fr track grows to content min-width → overflow). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
   flex: 1;
+  min-height: 0;
+}
+
+.board-rail {
+  display: none;
+}
+
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .game-layout {
+    grid-template-columns: 64px minmax(0, 1fr) 340px;
+    /* One row that takes exactly the leftover height so the board column
+       really stretches (App shell below is a fixed-height viewport app). */
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .board-rail {
+    display: block;
+    min-height: 1px;
+  }
+
+  /* Fixed-height desktop shell: the board column gets the TRUE leftover
+     height (measured by Board.tsx instead of a guessed 100dvh-160px), so
+     the board fills the largest square fitting both column dimensions. */
+  #app-root {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .board-col {
+    justify-content: center;
+    min-height: 0;
+  }
+
+  /* Stretch to the row height so ResizeObserver measures the real slot. */
+  .board-container {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* The right function column scrolls internally on short desktop windows
+     (with the sticky playback bar first) instead of squeezing the board. */
+  .side-col {
+    align-self: stretch;
+    overflow-y: auto;
+    min-height: 0;
+  }
 }
 
 .board-col {
@@ -123,9 +191,36 @@ body {
   min-width: 0;
 }
 
-/* Keep the board fully visible without scrolling on desktop. */
-.board-container {
-  max-width: min(100%, calc(100svh - 210px));
+/* Board sizing is JS-driven: Board.tsx measures this slot's content box
+   (width AND height) with ResizeObserver and renders the largest square
+   that fits both — no guessed fixed height deduction. On desktop this slot
+   is stretched to the true leftover column height (see @media below); on
+   mobile it is content-sized and width-bound, so no horizontal overflow. */
+
+/* --- Playback bar (inside the right function column) ------------------------- */
+
+.playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  color: #e0e0e0;
+  width: 100%;
+}
+
+.playback-bar > button {
+  flex: 1 1 0;
+  padding: 8px 0;
+}
+
+/* Sticky inside the scrolling side column so navigation stays reachable
+   without scrolling back up on short desktop windows. */
+.playback-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 /* --- Ownership overlay (OGS-style square confidence marks) ------------------ */
@@ -188,26 +283,6 @@ body {
   pointer-events: none;
 }
 
-.playback-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #1a1a2e;
-  border-radius: 8px;
-  color: #e0e0e0;
-}
-
-@media (max-width: 900px) {
-  .game-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .board-container {
-    max-width: 100%;
-  }
-}
-
 /* --- Zen mode (board only) --------------------------------------------------- */
 
 #app-root.zen-mode {
@@ -217,17 +292,22 @@ body {
 
 #app-root.zen-mode .game-layout {
   grid-template-columns: 1fr;
-  align-items: center;
+  /* One full-height row so the board slot can be measured/stretched too. */
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   width: 100%;
+  min-height: 0;
 }
 
 #app-root.zen-mode .board-col {
   justify-content: center;
   flex: 1;
+  min-height: 0;
 }
 
 #app-root.zen-mode .board-container {
-  max-width: min(100%, 100svh);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #zen-exit {
@@ -335,4 +415,19 @@ body {
   outline: 3px solid #3b82f6 !important;
   outline-offset: -3px;
   transition: outline 0.3s ease;
+}
+
+/* --- Review panel (game tree + winrate graph) -------------------------------- */
+
+/* Axis/series labels inside the winrate graph SVG. */
+.winrate-graph-label {
+  fill: #8a8ab0;
+  font-size: 8px;
+  font-family: system-ui, sans-serif;
+}
+
+/* Tree panel nodes: visible focus outline for keyboard navigation. */
+.game-tree-panel [role='button']:focus {
+  outline: 1px solid #5a7fb5;
+  outline-offset: 1px;
 }

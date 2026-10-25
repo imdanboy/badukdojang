@@ -1,5 +1,6 @@
 import { getMoveList, getSetupStones } from '../gameTree.ts'
 import type { GameTree } from '../gameTree.ts'
+import type { SetupStone } from '../gameTree.ts'
 import type { Player } from '../gameState.ts'
 import { EngineError } from './types.ts'
 import type { EngineSettings, AnalyzeResponse, Vertex } from './types.ts'
@@ -46,23 +47,31 @@ export function formatGTPVertex(vertex: Vertex, boardSize: number): string {
 }
 
 /**
- * GTP 재생용 착점 문자열 목록 — setup 돌(AB/AW)을 착수 앞에 붙인다.
+ * GTP 재생용 착수 문자열 목록 — setup 돌(AB/AW)을 착수 앞에 붙인다.
  * 스크린샷 이어하기 국면이 setup property 로 표현되므로, 착수 재생만으론
  * 엔진에 빈 판이 전달된다. setup 재생은 부분집합 논증으로 캡처·자살이
  * 일어나지 않는다 (gameTree.ts getCurrentSignMap 주석 참조).
  */
-function gtpReplayMoves(gameTree: GameTree, boardSize: number): string[] {
-  const setup = getSetupStones(gameTree).map((s) => {
+export function movesToGtpReplay(
+  setup: readonly SetupStone[],
+  moves: readonly { vertex: Vertex | 'pass'; sign: number }[],
+  boardSize: number,
+): string[] {
+  const setupMoves = setup.map((s) => {
     const color = s.sign === 1 ? 'B' : 'W'
     return `${color} ${formatGTPVertex(s.vertex, boardSize)}`
   })
-  const moves = getMoveList(gameTree).map((move) => {
+  const moveMoves = moves.map((move) => {
     const color = move.sign === 1 ? 'B' : 'W'
     const vertex =
       move.vertex === 'pass' ? 'pass' : formatGTPVertex(move.vertex, boardSize)
     return `${color} ${vertex}`
   })
-  return [...setup, ...moves]
+  return [...setupMoves, ...moveMoves]
+}
+
+function gtpReplayMoves(gameTree: GameTree, boardSize: number): string[] {
+  return movesToGtpReplay(getSetupStones(gameTree), getMoveList(gameTree), boardSize)
 }
 
 export function parseGTPVertex(gtp: string, boardSize: number): Vertex | 'pass' | 'resign' {
@@ -363,12 +372,33 @@ export async function requestAnalysis(
   signal?: AbortSignal,
   timeoutMs = 30000,
 ): Promise<AnalyzeResponse> {
+  return requestAnalysisForPath(
+    getSetupStones(gameTree),
+    getMoveList(gameTree),
+    settings,
+    signal,
+    timeoutMs,
+  )
+}
+
+/**
+ * Analyze an explicit position given its replay path (setup + moves) instead
+ * of the tree cursor — used by the full-tree batch analysis, which walks
+ * every variation branch off the current cursor.
+ */
+export async function requestAnalysisForPath(
+  setup: readonly SetupStone[],
+  moves: readonly { vertex: Vertex | 'pass'; sign: number }[],
+  settings: EngineSettings,
+  signal?: AbortSignal,
+  timeoutMs = 30000,
+): Promise<AnalyzeResponse> {
   const boardSize = settings.boardSize ?? 19
-  const moves = gtpReplayMoves(gameTree, boardSize)
+  const replay = movesToGtpReplay(setup, moves, boardSize)
 
   const body: Record<string, unknown> = {
     boardSize,
-    moves,
+    moves: replay,
     komi: settings.komi,
   }
 

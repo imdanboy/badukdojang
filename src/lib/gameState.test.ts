@@ -182,4 +182,51 @@ describe('gameState', () => {
     expect(gs.getSignMap()[0]![1]).toBe(1)
     expect(gs.getSignMap()[1]![0]).toBe(1)
   })
+
+  test('navigateToNode jumps to an arbitrary branch and stays consistent', () => {
+    const gs = createGameState(9)
+    gs.makeMove([3, 3]) // m1 B
+    const m1Id = String(gs.gameTree.currentId!)
+    gs.makeMove([4, 4]) // m2 W
+    gs.makeMove([5, 5]) // m3 B
+
+    // Jump back to m1 (game-tree view click).
+    expect(gs.navigateToNode(m1Id)).toBe(true)
+    expect(gs.getSignMap()[3]![3]).toBe(1)
+    expect(gs.getSignMap()[4]![4]).toBe(0)
+    expect(gs.getSignMap()[5]![5]).toBe(0)
+    expect(gs.currentPlayer).toBe(-1)
+    expect(gs.lastMove).toEqual([3, 3])
+    // Move counter matches the selected branch.
+    expect(gs.gameTree.currentId).toBe(gs.gameTree.get(m1Id)!.id)
+
+    // Unknown node: rejected, state untouched.
+    expect(gs.navigateToNode('does-not-exist')).toBe(false)
+    expect(gs.currentPlayer).toBe(-1)
+
+    // Undo/redo still work relative to the navigated node.
+    expect(gs.undo()).toBe(true)
+    expect(gs.getSignMap()[3]![3]).toBe(0)
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toBeNull()
+  })
+
+  test('navigating to a variation node shows that branch position', () => {
+    const gs = createGameState(9)
+    gs.makeMove([3, 3]) // m1
+    const m1Id = String(gs.gameTree.currentId!)
+    gs.makeMove([4, 4]) // m2 main
+    gs.undo()
+    gs.makeMove([6, 6]) // m2 variation (branch)
+    const variationId = String(gs.gameTree.currentId!)
+
+    // Jump to m1, then to the variation tip.
+    expect(gs.navigateToNode(m1Id)).toBe(true)
+    expect(gs.getSignMap()[4]![4]).toBe(0)
+    expect(gs.navigateToNode(variationId)).toBe(true)
+    expect(gs.getSignMap()[6]![6]).toBe(-1)
+    expect(gs.getSignMap()[4]![4]).toBe(0)
+    expect(gs.currentPlayer).toBe(1)
+    expect(gs.lastMove).toEqual([6, 6])
+  })
 })

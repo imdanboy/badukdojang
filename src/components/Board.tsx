@@ -1,7 +1,9 @@
 /*
  * Board - React wrapper around @kaya/shudan's <Goban>.
- * Measures container width via ResizeObserver and computes vertexSize
- * as a fixed pixel number (Shudan requires numeric vertexSize, not CSS).
+ * Measures the container (both width and height) via ResizeObserver and
+ * computes vertexSize as a fixed pixel number (Shudan requires numeric
+ * vertexSize, not CSS) so the board fills the largest square that fits the
+ * actual available slot — not just the column width.
  * Flashes a red border for 200ms when an illegal move is attempted.
  * The board theme is read from BoardThemeProvider context — the single
  * source of truth (no duplicated theme state in App).
@@ -55,6 +57,12 @@ interface ContentRect {
   size: number
 }
 
+/** Content-box size of the board slot available to the Goban. */
+interface ContainerSize {
+  width: number
+  height: number
+}
+
 export function Board({
   signMap,
   boardSize,
@@ -76,7 +84,10 @@ export function Board({
   const { boardTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [containerWidth, setContainerWidth] = useState(0)
+  const [containerSize, setContainerSize] = useState<ContainerSize>({
+    width: 0,
+    height: 0,
+  })
   const [contentRect, setContentRect] = useState<ContentRect | null>(null)
   const [flashError, setFlashError] = useState(false)
 
@@ -86,7 +97,10 @@ export function Board({
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width)
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        })
       }
     })
     observer.observe(el)
@@ -121,7 +135,7 @@ export function Board({
     const observer = new ResizeObserver(update)
     observer.observe(contentEl)
     return () => observer.disconnect()
-  }, [showOwnership, showPolicy, candidateMoves?.length, containerWidth, boardSize])
+  }, [showOwnership, showPolicy, candidateMoves?.length, containerSize.width, containerSize.height, boardSize])
 
   useEffect(() => {
     if (flashTrigger === 0) return
@@ -138,10 +152,50 @@ export function Board({
     return () => clearTimeout(timer)
   }, [aiFlashVertex])
 
+  // Fit the largest square that fills the measured slot in BOTH dimensions.
+  // Shudan's chrome (coordinate labels + Goban padding) adds a fixed number
+  // of vertex units around the boardSize×boardSize grid; we derive the exact
+  // factors from Goban's inline padding/coordinate styles so the square grid
+  // geometry stays intact and nothing overflows (verified in-browser):
+  //   - coordinates hidden: width = height = boardSize × vertexSize
+  //   - coordinates shown:
+  //       width  = (0.5 pad + 1 label col) × 2 chrome → boardSize + 3 units
+  //       height = 0.6 top pad + 0.6 top coord + 0.5 CoordY margin + 0.3
+  //                bottom coord (its -0.3 margin) + 0.4 bottom pad
+  //              → boardSize + 2.4 units (fractional — see wrap sizing below)
+  // Both fits are taken so desktop prefers the smaller (height-bound) side
+  // and mobile stays width-bound exactly as before.
+  //
+  // The wrapper is explicitly sized to the computed chrome box (integer
+  // height via ceil) so that layouts where the container is content-sized
+  // (mobile) re-measure a deterministic integer of our own choosing — the
+  // fractional chrome height (e.g. 21.4 × 16 = 342.4 rendered as 342.375)
+  // would otherwise floor into a full vertex drop and lock the board one
+  // step smaller. On desktop the container is stretched to the true slot,
+  // so the measured values are the genuine available space. A sub-pixel
+  // epsilon covers fractional slot end/heights; the resulting overflow
+  // (≤ divisor × epsilon ≈ ~1px) is invisible and absorbed by the border
+  // flash allowance.
+  const divisorW = boardSize + (showCoordinates ? 3 : 0)
+  const divisorH = boardSize + (showCoordinates ? 2.4 : 0)
+  const EPSILON = 0.5
+  const { width: availW, height: availH } = containerSize
   const vertexSize =
-    containerWidth > 0
-      ? Math.floor(containerWidth / boardSize)
+    availW > 0
+      ? Math.max(
+          4,
+          Math.floor(
+            Math.min(
+              (availW + EPSILON) / divisorW,
+              availH > 0 ? (availH + EPSILON) / divisorH : Number.POSITIVE_INFINITY,
+            ),
+          ),
+        )
       : 24
+  // Explicit integer wrapper size derived from our own fit choice — keeps
+  // content-sized (mobile) re-measurements deterministic (see above).
+  const chromeWidth = Math.round(divisorW * vertexSize)
+  const chromeHeight = Math.ceil(divisorH * vertexSize)
 
   // Ghost preview: no marker passed → Goban renders a faint ghost stone
   // (currentPlayer color, ~0.35 opacity) on the hovered empty vertex,
@@ -236,13 +290,18 @@ export function Board({
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
+    alignItems: 'center',
     border: flashError ? '3px solid red' : '3px solid transparent',
     transition: 'border-color 50ms ease',
   }
 
   return (
     <div ref={containerRef} style={containerStyle} className="board-container">
-      <div ref={wrapRef} className="board-goban-wrap" style={{ position: 'relative' }}>
+      <div
+        ref={wrapRef}
+        className="board-goban-wrap"
+        style={{ position: 'relative', width: chromeWidth, height: chromeHeight }}
+      >
         <Goban
           className={`shudan-theme-${boardTheme}`}
           vertexSize={vertexSize}

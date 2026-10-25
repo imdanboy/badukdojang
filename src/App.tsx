@@ -1,11 +1,12 @@
 /*
  * badukdojang — game screen composition.
  *
- * Layout (OGS-inspired): top bar + two columns — board & playback bar in
- * the center, core game controls in the sidebar. Non-core configuration
- * (engine tuning, board theme) lives in SettingsModal; per-game setup
- * (size, mode, difficulty) in NewGameModal. Zen mode hides everything
- * but the board.
+ * Layout (OGS-inspired): top bar + three columns — a reserved left rail
+ * (content TBD, empty for now), the board as the dominant center column,
+ * and the right column with playback controls + core game controls
+ * (GameSidebar). Non-core configuration (engine tuning, board theme)
+ * lives in SettingsModal; per-game setup (size, mode, difficulty) in
+ * NewGameModal. Zen mode hides everything but the board.
  *
  * Game flow state lives here; engine lifecycle in useEngine, analysis
  * polling in useAnalysis, scoring flow in useScoring.
@@ -18,6 +19,7 @@ import { Board } from './components/Board.tsx'
 import { TopBar } from './components/TopBar.tsx'
 import { GameSidebar } from './components/GameSidebar.tsx'
 import { PlaybackBar } from './components/PlaybackBar.tsx'
+import { ReviewPanel } from './components/ReviewPanel.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
 import { NewGameModal } from './components/NewGameModal.tsx'
 import type { NewGameConfig } from './components/NewGameModal.tsx'
@@ -29,11 +31,14 @@ import type { CandidateMove } from './components/CandidateMoves.tsx'
 import type { AiMoveStats } from './components/AiAnalysisPanel.tsx'
 import { useEngine } from './hooks/useEngine.ts'
 import { useAnalysis } from './hooks/useAnalysis.ts'
+import { useTreeAnalysis } from './hooks/useTreeAnalysis.ts'
 import { useScoring } from './hooks/useScoring.ts'
-import type { BoardSize, GameMode } from './lib/types.ts'
+import type { BoardSize, GameMode, MoveNumberMode } from './lib/types.ts'
 import { createGameState } from './lib/gameState.ts'
 import type { GameState } from './lib/gameState.ts'
-import { getMoveList } from './lib/gameTree.ts'
+import { getMoveList, getMoveNumberMap } from './lib/gameTree.ts'
+import { buildWinratePoints } from './lib/treeLayout.ts'
+import type { WinratePoint } from './lib/treeLayout.ts'
 import {
   downloadSGF,
   getBoardSizeFromTree,
@@ -41,7 +46,7 @@ import {
   loadSGFFile,
   sgfToTree,
 } from './lib/sgfIo.ts'
-import type { SgfAnalysisEmbed } from './lib/sgfIo.ts'
+import type { SgfAnalysisEmbed, SgfAnalysisEntry } from './lib/sgfIo.ts'
 import { withPlayerToPlay } from './lib/screenshotRecognition.ts'
 import type { AnalysisMetadata } from './lib/analysisSgf.ts'
 import {
@@ -149,11 +154,29 @@ export function App() {
   }, [refreshModelPaths])
 
   // --- Analysis polling -----------------------------------------------------
+  // Shared node-id-keyed cache: the live per-position analysis AND the
+  // full-tree batch analysis read/write the same results (SGF save embeds
+  // the whole map). The cache clears when the run context changes.
+  const analysisCacheRef = useRef(new Map<string, SgfAnalysisEntry>())
+
+  // --- Full-tree batch analysis (Feature B) ---------------------------------
+  const treeAnalysis = useTreeAnalysis({
+    gameState,
+    engineEnabled: engineSettings.enabled,
+    getLightAnalysisSettings,
+    analysisModelPath,
+    analysisCacheRef,
+    timeoutMs: ANALYSIS_TIMEOUT,
+  })
+
+  // While the batch run owns the engine, the live per-position fetch pauses
+  // (the panel keeps showing cached results; it resumes after the batch).
   const analysisEnabled =
-    showWinrate ||
-    showOwnership ||
-    showPolicy ||
-    (gameMode === 'selfplay' && showCandidates)
+    !treeAnalysis.isActive &&
+    (showWinrate ||
+      showOwnership ||
+      showPolicy ||
+      (gameMode === 'selfplay' && showCandidates))
   const {
     winrateAnalysis,
     winrateLoading,
@@ -161,7 +184,6 @@ export function App() {
     ownership,
     policy,
     analysisDurationMs,
-    analysisCacheRef,
   } = useAnalysis({
     engineEnabled: engineSettings.enabled,
     enabled: analysisEnabled,
@@ -170,6 +192,7 @@ export function App() {
     getLightAnalysisSettings,
     analysisModelPath,
     timeoutMs: ANALYSIS_TIMEOUT,
+    analysisCacheRef,
   })
 
   // --- Scoring flow ---------------------------------------------------------
@@ -196,6 +219,18 @@ export function App() {
     setEngineError,
   })
 
+  // --- Review/놓아보기 수 번호 모드 --------------------------------------------
+  // 'hidden'(기본) / 'all'(현재 경로 전체 1부터) / 'fromCurrent'(선택 노드부터
+  // 1로 시작). 선택 시작점(anchor)은 트리 노드 id — 새 대국/SGF 불러오기 시
+  // 반드시 초기화해 stale id가 새 트리에 잘못 적용되지 않게 한다.
+  const [moveNumberMode, setMoveNumberMode] = useState<MoveNumberMode>('hidden')
+  const [moveNumberAnchorId, setMoveNumberAnchorId] = useState<string | null>(null)
+
+  const resetMoveNumbering = useCallback(() => {
+    setMoveNumberMode('hidden')
+    setMoveNumberAnchorId(null)
+  }, [])
+
   // Re-initialize game state whenever the size changes (SGF load path).
   // Skip the initial run: boot may have restored a draft, and a blank reset
   // here would erase the restored game.
@@ -208,7 +243,9 @@ export function App() {
     const newGameState = createGameState(boardSize)
     setGameState(newGameState)
     setSignMap(newGameState.getSignMap())
-  }, [boardSize])
+    // Stale numbering anchor must not leak into a freshly (re)initialized tree.
+    resetMoveNumbering()
+  }, [boardSize, resetMoveNumbering])
 
   // --- Active-game autosave ---------------------------------------------------
   // Persist the draft after every tree change (move/pass/undo/redo/navigate)
@@ -237,7 +274,46 @@ export function App() {
     }
   }, [toast])
 
+  /**
+   * 번호 버튼 클릭: 이미 활성인 버튼을 다시 누르면 끄고,
+   * 다른 버튼을 누르면 모드를 전환한다. '여기부터'는 항상 현재
+   * 선택 노드를 새 시작점(anchor)으로 삼는다.
+   */
+  const handleMoveNumberMode = useCallback(
+    (mode: Exclude<MoveNumberMode, 'hidden'>) => {
+      setMoveNumberMode((prev) => (prev === mode ? 'hidden' : mode))
+      if (mode === 'fromCurrent') {
+        setMoveNumberAnchorId(
+          String(gameState.gameTree.currentId ?? gameState.gameTree.root.id),
+        )
+      }
+    },
+    [gameState],
+  )
+
   // --- Marker maps (last-move circle + scoring crosses) ----------------------
+
+  // Review/놓아보기 move numbers: "전체 번호"/"여기부터" 모드에서만 표시한다.
+  // Selfplay(놓아보기) 전용 — AI 모드로 전환하면 번호가 사라진다.
+  const moveNumberMap = useMemo(() => {
+    if (gameMode !== 'selfplay') return undefined
+    if (moveNumberMode === 'hidden') return undefined
+    if (moveNumberMode === 'fromCurrent') {
+      if (moveNumberAnchorId === null) return undefined
+      return getMoveNumberMap(gameState.gameTree, boardSize, {
+        fromNodeId: moveNumberAnchorId,
+      })
+    }
+    return getMoveNumberMap(gameState.gameTree, boardSize)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    gameMode,
+    moveNumberMode,
+    moveNumberAnchorId,
+    gameState.gameTree,
+    boardSize,
+    moveVersion,
+  ])
 
   const scoringMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
     if (!isScoring || effectiveDeadStones.length === 0) return undefined
@@ -252,7 +328,11 @@ export function App() {
   }, [signMap, isScoring, effectiveDeadStones])
 
   const combinedMarkerMap = useMemo<BoardMap<Marker | null> | undefined>(() => {
-    if (gameState.lastMove === null && scoringMarkerMap === undefined) {
+    if (
+      gameState.lastMove === null &&
+      scoringMarkerMap === undefined &&
+      moveNumberMap == null
+    ) {
       return undefined
     }
     const map: BoardMap<Marker | null> = signMap.map((row) =>
@@ -265,6 +345,18 @@ export function App() {
         row[lx] = { type: 'circle' }
       }
     }
+    // Move-number labels take precedence over the last-move circle.
+    if (moveNumberMap != null) {
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[y]!.length; x++) {
+          const n = moveNumberMap[y]?.[x]
+          if (n != null) {
+            map[y]![x] = { type: 'label', label: String(n) }
+          }
+        }
+      }
+    }
+    // Scoring crosses win over everything (dead-stone marking).
     if (scoringMarkerMap !== undefined) {
       for (let y = 0; y < map.length; y++) {
         for (let x = 0; x < map[y]!.length; x++) {
@@ -276,7 +368,7 @@ export function App() {
       }
     }
     return map
-  }, [signMap, gameState.lastMove, scoringMarkerMap])
+  }, [signMap, gameState.lastMove, scoringMarkerMap, moveNumberMap])
 
   // --- Candidates (self-play study hints) ------------------------------------
 
@@ -491,6 +583,7 @@ export function App() {
     clearActiveGame()
     setAiMoveStats(null)
     setAnalysisMetadata(null)
+    resetMoveNumbering()
     const newGameState = createGameState(config.size)
       setGameState(newGameState)
       setSignMap(newGameState.getSignMap())
@@ -502,7 +595,7 @@ export function App() {
       }
       setNewGameOpen(false)
     },
-    [abortAiAndReset, gameState, setEngineSettings, engineSettings.enabled, showToast],
+    [abortAiAndReset, gameState, resetMoveNumbering, setEngineSettings, engineSettings.enabled, showToast],
   )
 
   const handlePass = () => {
@@ -540,6 +633,20 @@ export function App() {
       setMoveVersion((v) => v + 1)
     }
   }
+
+  // --- Review (tree navigation + winrate graph) --------------------------------
+
+  /** Tree-view node click / graph point click: jump the board to that state. */
+  const handleNavigateToNode = (nodeId: string) => {
+    navigate(() => gameState.navigateToNode(nodeId))
+  }
+
+  /** Winrate graph series for the currently selected branch (Black view). */
+  const winratePoints = useMemo<readonly WinratePoint[]>(() => {
+    return buildWinratePoints(gameState.gameTree, analysisCacheRef.current)
+    // treeAnalysis.completed re-computes the series as batch results land.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.gameTree, moveVersion, treeAnalysis.completed, analysisCacheRef])
 
   // --- SGF ---------------------------------------------------------------------
 
@@ -590,6 +697,8 @@ export function App() {
       setSignMap(newGameState.getSignMap())
       setMoveVersion((v) => v + 1)
       setAnalysisMetadata(getAnalysisMetadataFromTree(newGameState.gameTree))
+      // SGF node ids are regenerated by the parser — drop any numbering anchor.
+      resetMoveNumbering()
     } catch (error) {
       console.error('Failed to load SGF:', error)
     } finally {
@@ -619,6 +728,7 @@ export function App() {
       setSignMap(newGameState.getSignMap())
       setMoveVersion((v) => v + 1)
       setAnalysisMetadata(getAnalysisMetadataFromTree(newGameState.gameTree))
+      resetMoveNumbering()
       setScreenshotImportOpen(false)
       showToast('스크린샷에서 국면을 이어받았습니다.')
     } catch (error) {
@@ -710,6 +820,7 @@ export function App() {
         )}
 
         <div className="game-layout">
+          {!zenMode && <aside className="board-rail" aria-hidden="true" />}
           <div className="board-col">
             <Board
               signMap={signMap}
@@ -729,7 +840,10 @@ export function App() {
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
               hoverGhostDisabled={isAiThinking}
             />
-            {!zenMode && (
+          </div>
+
+          {!zenMode && (
+            <div className="side-col">
               <PlaybackBar
                 gameState={gameState}
                 moveVersion={moveVersion}
@@ -738,50 +852,60 @@ export function App() {
                 onNext={() => navigate(() => gameState.redo())}
                 onLast={() => navigate(() => gameState.jumpToEnd())}
               />
+              <ReviewPanel
+                gameState={gameState}
+                moveVersion={moveVersion}
+                gameMode={gameMode}
+                engineEnabled={engineSettings.enabled}
+                treeAnalysis={treeAnalysis}
+                winratePoints={winratePoints}
+                moveNumberMode={moveNumberMode}
+                moveNumberLabelsVisible={moveNumberMap != null}
+                onMoveNumberModeSelect={handleMoveNumberMode}
+                onTreeNodeClick={handleNavigateToNode}
+                onGraphNodeClick={handleNavigateToNode}
+              />
+              <GameSidebar
+                gameState={gameState}
+                moveVersion={moveVersion}
+                gameMode={gameMode}
+                isAiThinking={isAiThinking}
+                onAiMove={handleAiMove}
+                onPass={handlePass}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onNewGameRequest={() => setNewGameOpen(true)}
+                onOpenScreenshot={() => setScreenshotImportOpen(true)}
+                canScore={canScore}
+                isScoring={isScoring}
+                onScore={handleScore}
+                onSaveSGF={handleSaveSGF}
+                onFileChange={handleFileChange}
+                showWinrate={showWinrate}
+                onToggleWinrate={() => setShowWinrate((prev) => !prev)}
+                showPolicy={showPolicy}
+                onTogglePolicy={() => setShowPolicy((prev) => !prev)}
+                showOwnership={showOwnership}
+                onToggleOwnership={() => setShowOwnership((prev) => !prev)}
+                showCandidates={showCandidates}
+                onToggleCandidates={() => setShowCandidates((prev) => !prev)}
+                showSummary={showSummary}
+                onToggleSummary={() => setShowSummary((prev) => !prev)}
+                showAiAnalysis={showAiAnalysis}
+                onToggleAiAnalysis={() => setShowAiAnalysis((prev) => !prev)}
+                aiMoveStats={aiMoveStats}
+                analysis={winrateAnalysis}
+                analysisLoading={winrateLoading}
+                analysisError={winrateError}
+                engineEnabled={engineSettings.enabled}
+                analysisDurationMs={analysisDurationMs}
+                analysisSettings={analysisSettings}
+                analysisMetadata={analysisMetadata}
+                candidates={candidates}
+                onSelectCandidate={handleSelectCandidate}
+                />
+              </div>
             )}
-          </div>
-
-          {!zenMode && (
-            <GameSidebar
-              gameState={gameState}
-              moveVersion={moveVersion}
-              gameMode={gameMode}
-              isAiThinking={isAiThinking}
-              onAiMove={handleAiMove}
-              onPass={handlePass}
-              onUndo={handleUndo}
-              onRedo={handleRedo}
-              onNewGameRequest={() => setNewGameOpen(true)}
-              onOpenScreenshot={() => setScreenshotImportOpen(true)}
-              canScore={canScore}
-              isScoring={isScoring}
-              onScore={handleScore}
-              onSaveSGF={handleSaveSGF}
-              onFileChange={handleFileChange}
-              showWinrate={showWinrate}
-              onToggleWinrate={() => setShowWinrate((prev) => !prev)}
-              showPolicy={showPolicy}
-              onTogglePolicy={() => setShowPolicy((prev) => !prev)}
-              showOwnership={showOwnership}
-              onToggleOwnership={() => setShowOwnership((prev) => !prev)}
-              showCandidates={showCandidates}
-              onToggleCandidates={() => setShowCandidates((prev) => !prev)}
-              showSummary={showSummary}
-              onToggleSummary={() => setShowSummary((prev) => !prev)}
-              showAiAnalysis={showAiAnalysis}
-              onToggleAiAnalysis={() => setShowAiAnalysis((prev) => !prev)}
-              aiMoveStats={aiMoveStats}
-              analysis={winrateAnalysis}
-              analysisLoading={winrateLoading}
-              analysisError={winrateError}
-              engineEnabled={engineSettings.enabled}
-              analysisDurationMs={analysisDurationMs}
-              analysisSettings={analysisSettings}
-              analysisMetadata={analysisMetadata}
-              candidates={candidates}
-              onSelectCandidate={handleSelectCandidate}
-            />
-          )}
         </div>
 
         <SettingsModal
