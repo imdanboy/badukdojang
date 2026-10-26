@@ -220,9 +220,10 @@ export function App() {
   })
 
   // --- Review/놓아보기 수 번호 모드 --------------------------------------------
-  // 'hidden'(기본) / 'all'(현재 경로 전체 1부터) / 'fromCurrent'(선택 노드부터
-  // 1로 시작). 선택 시작점(anchor)은 트리 노드 id — 새 대국/SGF 불러오기 시
-  // 반드시 초기화해 stale id가 새 트리에 잘못 적용되지 않게 한다.
+  // 'hidden'(기본) / 'all'(현재 경로 전체 1부터) / 'fromCurrent'(선택 노드
+  // "이후"의 착수만 1부터 — 누른 순간 이미 놓인 돌은 무번호). 선택 시작점
+  // (anchor)은 트리 노드 id — 새 대국/SGF 불러오기 시 반드시 초기화해
+  // stale id가 새 트리에 잘못 적용되지 않게 한다.
   const [moveNumberMode, setMoveNumberMode] = useState<MoveNumberMode>('hidden')
   const [moveNumberAnchorId, setMoveNumberAnchorId] = useState<string | null>(null)
 
@@ -275,25 +276,32 @@ export function App() {
   }, [toast])
 
   /**
-   * 번호 버튼 클릭: 이미 활성인 버튼을 다시 누르면 끄고,
-   * 다른 버튼을 누르면 모드를 전환한다. '여기부터'는 항상 현재
-   * 선택 노드를 새 시작점(anchor)으로 삼는다.
+   * 번호 토글 클릭: 활성 토글을 다시 누르면 끄고(라벨/anchor 모두 해제),
+   * 다른 토글로 전환한다. '번호 표시'는 현재 선택 노드를 시작점(anchor)으로
+   * 삼되 그 "이후" 착수만 번호를 매긴다. '전체 수순'이 켜진 동안에는
+   * '번호 표시' 버튼이 비활성이라 이 핸들러로 fromCurrent 전환은 오지 않는다.
    */
   const handleMoveNumberMode = useCallback(
     (mode: Exclude<MoveNumberMode, 'hidden'>) => {
-      setMoveNumberMode((prev) => (prev === mode ? 'hidden' : mode))
-      if (mode === 'fromCurrent') {
-        setMoveNumberAnchorId(
-          String(gameState.gameTree.currentId ?? gameState.gameTree.root.id),
-        )
+      if (moveNumberMode === mode) {
+        // Toggle off — labels disappear immediately.
+        setMoveNumberMode('hidden')
+        setMoveNumberAnchorId(null)
+        return
       }
+      setMoveNumberMode(mode)
+      setMoveNumberAnchorId(
+        mode === 'fromCurrent'
+          ? String(gameState.gameTree.currentId ?? gameState.gameTree.root.id)
+          : null,
+      )
     },
-    [gameState],
+    [gameState, moveNumberMode],
   )
 
   // --- Marker maps (last-move circle + scoring crosses) ----------------------
 
-  // Review/놓아보기 move numbers: "전체 번호"/"여기부터" 모드에서만 표시한다.
+  // Review/놓아보기 move numbers: "전체 수순"/"번호 표시" 모드에서만 표시한다.
   // Selfplay(놓아보기) 전용 — AI 모드로 전환하면 번호가 사라진다.
   const moveNumberMap = useMemo(() => {
     if (gameMode !== 'selfplay') return undefined

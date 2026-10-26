@@ -3,8 +3,9 @@
  *   1. Complete SGF game-tree visualization with variation navigation.
  *   2. Full-tree batch analysis (전체 분석) with progress + prominent cancel.
  *   3. Winrate graph of the currently selected branch (click = navigate).
- *   4. 수 번호 표시 모드 — 놓아보기 전용: "전체 번호"(현재 경로 1부터)와
- *      "여기부터"(선택 노드부터 1로). 같은 버튼 재클릭 = 끄기.
+ *   4. 수 번호 표시 모드 — 놓아보기 전용: "전체 수순"(현재 경로 1부터)과
+ *      "번호 표시"(선택 노드 이후 착수만 1로, 이미 놓인 돌은 무번호).
+ *      같은 버튼 재클릭 = 끄기. 전체 수순이 켜진 동안 번호 표시는 비활성.
  *
  * Compact: everything scrolls/bounds itself so the existing function column
  * (which scrolls internally on short desktop) and mobile layouts stay intact.
@@ -217,18 +218,28 @@ export function ReviewPanel({
           <button
             id="move-number-all"
             style={smallBtnStyle(moveNumberMode === 'all', false)}
+            aria-pressed={moveNumberMode === 'all'}
             title="현재 경로의 모든 착수를 1부터 번호로 표시합니다. 다시 누르면 끕니다."
             onClick={() => onMoveNumberModeSelect('all')}
           >
-            전체 번호
+            전체 수순
           </button>
           <button
             id="move-number-from-current"
-            style={smallBtnStyle(moveNumberMode === 'fromCurrent', false)}
-            title="지금 선택한 노드(트리)부터 1번으로 번호를 매깁니다. 다시 누르면 끕니다."
+            style={smallBtnStyle(
+              moveNumberMode === 'fromCurrent',
+              moveNumberMode === 'all',
+            )}
+            aria-pressed={moveNumberMode === 'fromCurrent'}
+            disabled={moveNumberMode === 'all'}
+            title={
+              moveNumberMode === 'all'
+                ? '전체 수순이 켜져 있어 사용할 수 없습니다'
+                : '지금 선택한 노드 이후의 착수만 1부터 매깁니다 (이미 놓인 돌은 번호 없음). 다시 누르면 끕니다.'
+            }
             onClick={() => onMoveNumberModeSelect('fromCurrent')}
           >
-            여기부터
+            번호 표시
           </button>
           {moveNumberMode === 'fromCurrent' && (
             <span
@@ -236,7 +247,7 @@ export function ReviewPanel({
               style={{ fontSize: '11px', opacity: 0.65 }}
             >
               {moveNumberLabelsVisible
-                ? '선택 노드부터 1번'
+                ? '선택 노드 이후 착수부터 1번'
                 : '시작점이 현재 경로 밖 — 이동 후 다시 누르세요'}
             </span>
           )}

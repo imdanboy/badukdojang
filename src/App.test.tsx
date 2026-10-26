@@ -657,9 +657,12 @@ describe('Review — move numbers on stones (selfplay/놓아보기)', () => {
     render(<App />)
 
     // Numbering is hidden by default (existing full numbering = explicit
-    // 'all' mode via the 전체 번호 button).
+    // 'all' mode via the 전체 수순 button).
     expect(moveLabels().size).toBe(0)
-    fireEvent.click(screen.getByText('전체 번호'))
+    const allBtn = screen.getByText('전체 수순') as HTMLButtonElement
+    expect(allBtn.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(allBtn)
+    expect(allBtn.getAttribute('aria-pressed')).toBe('true')
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -681,7 +684,7 @@ describe('Review — move numbers on stones (selfplay/놓아보기)', () => {
 
   test('all mode labels disappear in AI mode and return in selfplay', async () => {
     render(<App />)
-    fireEvent.click(screen.getByText('전체 번호'))
+    fireEvent.click(screen.getByText('전체 수순'))
     await clickVertex(3, 3, 19)
     expect(moveLabels().get('3,3')).toBe('1')
 
@@ -716,71 +719,140 @@ describe('Review — move-number display modes', () => {
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
     expect(moveLabels().size).toBe(0)
+
+    // Both toggles are accessible toggle buttons, off and enabled by default.
+    const allBtn = screen.getByText('전체 수순') as HTMLButtonElement
+    const displayBtn = screen.getByText('번호 표시') as HTMLButtonElement
+    expect(allBtn.getAttribute('aria-pressed')).toBe('false')
+    expect(displayBtn.getAttribute('aria-pressed')).toBe('false')
+    expect(allBtn.disabled).toBe(false)
+    expect(displayBtn.disabled).toBe(false)
   })
 
   test('all mode: re-clicking the active button turns numbering off', async () => {
     render(<App />)
-    fireEvent.click(screen.getByText('전체 번호'))
+    fireEvent.click(screen.getByText('전체 수순'))
     await clickVertex(3, 3, 19)
     expect(moveLabels().get('3,3')).toBe('1')
+    expect(
+      (screen.getByText('전체 수순') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
 
     // Re-click = off (back to hidden).
-    fireEvent.click(screen.getByText('전체 번호'))
+    fireEvent.click(screen.getByText('전체 수순'))
     expect(moveLabels().size).toBe(0)
+    expect(
+      (screen.getByText('전체 수순') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('false')
   })
 
-  test('from-current mode: the selected node counts as 1, earlier labels hidden', async () => {
+  test('all mode disables the 번호 표시 toggle until it is turned off', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('전체 수순'))
+    await clickVertex(3, 3, 19)
+    expect(moveLabels().get('3,3')).toBe('1')
+    expect((screen.getByText('번호 표시') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+
+    // Turning all mode off re-enables the other toggle.
+    fireEvent.click(screen.getByText('전체 수순'))
+    expect(moveLabels().size).toBe(0)
+    expect((screen.getByText('번호 표시') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  test('번호 표시 at a non-root position: existing stones stay unlabeled, later moves number 1, 2', async () => {
     render(<App />)
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
     await clickVertex(5, 5, 19)
-    // Back to the move-2 node → "여기부터" anchors numbering there.
+    // Back to the move-2 node: (3,3) and (4,4) are already on the board.
     fireEvent.click(screen.getByText('Undo'))
-    fireEvent.click(screen.getByText('여기부터'))
+    fireEvent.click(screen.getByText('번호 표시'))
 
+    // Stones already on the board at press time must NOT be labeled.
     let labels = moveLabels()
-    expect(labels.get('4,4')).toBe('1') // anchor's own move = 1
-    expect(labels.get('5,5')).toBeUndefined() // before anchor: off the board anyway
-    expect(labels.get('3,3')).toBeUndefined() // earlier move — label hidden
+    expect(labels.size).toBe(0)
+    expect(labels.get('3,3')).toBeUndefined()
+    expect(labels.get('4,4')).toBeUndefined()
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
 
-    // Descendants continue the counting (2, 3, …).
+    // Moves played after the press are numbered from 1.
     fireEvent.click(document.getElementById('playback-next')!)
     labels = moveLabels()
-    expect(labels.get('5,5')).toBe('2')
+    expect(labels.get('5,5')).toBe('1')
     expect(labels.get('3,3')).toBeUndefined()
+    expect(labels.get('4,4')).toBeUndefined()
 
-    // Re-click turns numbering off.
-    fireEvent.click(screen.getByText('여기부터'))
+    // Subsequent moves continue: 2, 3, …
+    await clickVertex(6, 6, 19)
+    labels = moveLabels()
+    expect(labels.get('6,6')).toBe('2')
+    expect(labels.get('5,5')).toBe('1')
+
+    // Re-click turns numbering off and removes the labels.
+    fireEvent.click(screen.getByText('번호 표시'))
     expect(moveLabels().size).toBe(0)
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('false')
   })
 
-  test('from-current at root: the next move is 1', async () => {
+  test('번호 표시 at root: the next move is 1', async () => {
     render(<App />)
-    fireEvent.click(screen.getByText('여기부터'))
+    fireEvent.click(screen.getByText('번호 표시'))
     await clickVertex(3, 3, 19)
     expect(moveLabels().get('3,3')).toBe('1')
   })
 
-  test('mode switch: clicking the other numbering button switches modes', async () => {
+  test('mode switch: 전체 수순 switches away from 번호 표시, which is disabled while all mode is on', async () => {
     render(<App />)
-    fireEvent.click(screen.getByText('전체 번호'))
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
-    expect(moveLabels().get('3,3')).toBe('1')
-    expect(moveLabels().get('4,4')).toBe('2')
 
-    // Switch to from-current anchored at the latest node…
-    fireEvent.click(screen.getByText('여기부터'))
+    // 번호 표시 on at move 2 → existing stones unlabeled, button enabled.
+    fireEvent.click(screen.getByText('번호 표시'))
+    expect(moveLabels().size).toBe(0)
+    expect((screen.getByText('전체 수순') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+
+    // Clicking 전체 수순 while 번호 표시 is on switches to all mode —
+    // every stone on the path gets its path number.
+    fireEvent.click(screen.getByText('전체 수순'))
     let labels = moveLabels()
-    expect(labels.get('4,4')).toBe('1')
-    expect(labels.get('3,3')).toBeUndefined()
-
-    // …and back to all numbering.
-    fireEvent.click(screen.getByText('전체 번호'))
-    labels = moveLabels()
     expect(labels.get('3,3')).toBe('1')
     expect(labels.get('4,4')).toBe('2')
+    expect(
+      (screen.getByText('전체 수순') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
+
+    // While all mode is on, 번호 표시 must be disabled/non-actionable.
+    expect((screen.getByText('번호 표시') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+
+    // Turning all mode off re-enables it.
+    fireEvent.click(screen.getByText('전체 수순'))
+    expect(moveLabels().size).toBe(0)
+    expect((screen.getByText('번호 표시') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
   })
 
   test('branch navigation: a sibling branch outside the anchor subtree shows no labels', async () => {
@@ -793,10 +865,10 @@ describe('Review — move-number display modes', () => {
     fireEvent.click(screen.getByText('Undo'))
     await clickVertex(6, 6, 19)
 
-    // Anchor = variation tip (current node).
-    fireEvent.click(screen.getByText('여기부터'))
-    let labels = moveLabels()
-    expect(labels.get('6,6')).toBe('1') // anchor's own move = 1
+    // Anchor = variation tip (current node): nothing is played after the
+    // press yet, so no labels appear.
+    fireEvent.click(screen.getByText('번호 표시'))
+    expect(moveLabels().size).toBe(0)
 
     // Jump to the main-line tip — the anchor is NOT an ancestor of that
     // path, so nothing may be mislabeled over there.
@@ -811,18 +883,30 @@ describe('Review — move-number display modes', () => {
 
     // Turn numbering off and pick a new start point on this branch:
     // first re-click ends the old anchor…
-    fireEvent.click(screen.getByText('여기부터'))
+    fireEvent.click(screen.getByText('번호 표시'))
     expect(document.getElementById('move-number-anchor-hint')).toBeNull()
     expect(moveLabels().size).toBe(0)
 
-    // …then clicking again re-anchors numbering at the CURRENT node.
-    fireEvent.click(screen.getByText('여기부터'))
-    labels = moveLabels()
-    expect(labels.get('5,5')).toBe('1')
-    expect(labels.get('3,3')).toBeUndefined()
+    // …then pressing again anchors at the CURRENT node (main tip): existing
+    // stones stay unlabeled and only later moves on THIS branch get labels.
+    fireEvent.click(screen.getByText('번호 표시'))
+    expect(moveLabels().size).toBe(0)
     expect(
       document.getElementById('move-number-anchor-hint')?.textContent,
-    ).toContain('선택 노드부터')
+    ).toContain('선택 노드 이후')
+    await clickVertex(7, 7, 19)
+    let labels = moveLabels()
+    expect(labels.get('7,7')).toBe('1')
+    expect(labels.get('5,5')).toBeUndefined()
+    expect(labels.get('3,3')).toBeUndefined()
+
+    // Jump back to the variation — the anchor (main tip + its child) is
+    // off that path, so no sibling move may be mislabeled.
+    fireEvent.click(document.querySelector('[data-tree-node="3"]')!)
+    await waitFor(() => {
+      expect(screen.getByText('Move 3')).toBeTruthy()
+    })
+    expect(moveLabels().size).toBe(0)
   })
 
   test('starting a new game resets the numbering mode and stale anchor', async () => {
@@ -831,8 +915,12 @@ describe('Review — move-number display modes', () => {
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
-    fireEvent.click(screen.getByText('여기부터'))
-    expect(moveLabels().get('4,4')).toBe('1')
+    fireEvent.click(screen.getByText('번호 표시'))
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
 
     // New game: numbering must be hidden again — no stale anchor applies.
     fireEvent.click(screen.getByText('New Game'))
@@ -842,10 +930,16 @@ describe('Review — move-number display modes', () => {
     })
     expect(moveLabels().size).toBe(0)
     expect(document.getElementById('move-number-anchor-hint')).toBeNull()
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('false')
 
-    // Numbering works again on the fresh tree.
+    // Numbering works again on the fresh tree: press at the root, then the
+    // moves played after the press are numbered from 1.
+    fireEvent.click(screen.getByText('번호 표시'))
     await clickVertex(3, 3, 19)
-    fireEvent.click(screen.getByText('여기부터'))
     expect(moveLabels().get('3,3')).toBe('1')
 
     confirmMock.mockRestore()
@@ -856,8 +950,12 @@ describe('Review — move-number display modes', () => {
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
-    fireEvent.click(screen.getByText('여기부터'))
-    expect(moveLabels().get('4,4')).toBe('1')
+    fireEvent.click(screen.getByText('번호 표시'))
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
 
     // Replacing the game with an SGF resets the anchor…
     const sgf = '(;FF[4]GM[1]SZ[19];B[pd];W[dc];B[ce])'
@@ -870,8 +968,13 @@ describe('Review — move-number display modes', () => {
     })
     expect(moveLabels().size).toBe(0)
     expect(document.getElementById('move-number-anchor-hint')).toBeNull()
+    expect(
+      (screen.getByText('번호 표시') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('false')
     // …and explicit numbering after the load uses the parsed tree correctly.
-    fireEvent.click(screen.getByText('전체 번호'))
+    fireEvent.click(screen.getByText('전체 수순'))
     expect(moveLabels().size).toBe(3)
   })
 })

@@ -377,8 +377,8 @@ describe('getMoveNumberMap', () => {
   })
 })
 
-describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
-  test('numbering restarts at 1 on the anchor node itself', () => {
+describe('getMoveNumberMap — fromNodeId (번호 표시 numbering)', () => {
+  test('numbering starts at 1 on the move AFTER the anchor; the anchor stone stays unlabeled', () => {
     const tree = createGameTree(9)
     const t1 = appendMove(tree, [0, 0], 1)
     const t2 = appendMove(t1, [1, 1], -1)
@@ -386,21 +386,21 @@ describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
     const t3 = appendMove(t2, [2, 2], 1)
 
     const numbers = getMoveNumberMap(t3, 9, { fromNodeId: anchorId })!
-    expect(numbers[1]![1]).toBe(1) // anchor's own move
-    expect(numbers[2]![2]).toBe(2)
     expect(numbers[0]![0]).toBeNull() // earlier move — label hidden
+    expect(numbers[1]![1]).toBeNull() // anchor's own stone — already on the board, unlabeled
+    expect(numbers[2]![2]).toBe(1) // first move after the anchor
   })
 
   test('a negative (parsed SGF) id works the same as a string id', () => {
     const tree = sgfToTree('(;FF[4]GM[1]SZ[9];B[aa];W[bb];B[cc])')
     const firstMoveId = String(tree.root.children[0]!.id)
     const numbers = getMoveNumberMap(tree, 9, { fromNodeId: firstMoveId })!
-    expect(numbers[0]![0]).toBe(1)
-    expect(numbers[1]![1]).toBe(2)
-    expect(numbers[2]![2]).toBe(3)
+    expect(numbers[0]![0]).toBeNull() // anchor's own stone — unlabeled
+    expect(numbers[1]![1]).toBe(1)
+    expect(numbers[2]![2]).toBe(2)
   })
 
-  test('a pass anchor counts itself (no label) and numbers following moves', () => {
+  test('a pass anchor does not consume a number; the next move is 1', () => {
     const tree = createGameTree(9)
     const t1 = appendMove(tree, [0, 0], 1)
     const t2 = appendPass(t1, -1)
@@ -408,7 +408,7 @@ describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
     const t3 = appendMove(t2, [2, 2], 1)
 
     const numbers = getMoveNumberMap(t3, 9, { fromNodeId: anchorId })!
-    expect(numbers[2]![2]).toBe(2) // pass = 1, next move = 2
+    expect(numbers[2]![2]).toBe(1) // first move after the anchor
     expect(numbers[0]![0]).toBeNull() // before the anchor — hidden
   })
 
@@ -446,7 +446,7 @@ describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
     expect(getMoveNumberMap(undone, 9, { fromNodeId: tipId })).toBeNull()
   })
 
-  test('an anchor above a fork numbers each descendant branch from its own moves', () => {
+  test('an anchor above a fork numbers each descendant branch from its own moves after the anchor', () => {
     // Line A: (0,0)(1,1)(2,2); undo to (0,0) and fork line B: (5,5).
     const tree = createGameTree(9)
     const t1 = appendMove(tree, [0, 0], 1)
@@ -455,13 +455,14 @@ describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
     const variation = appendMove(atM1, [5, 5], -1)
     const m1Id = String(t1.currentId!)
 
-    // Both branches keep the anchor's own move as 1 and continue locally.
+    // The anchor's own stone stays unlabeled; each branch's later moves
+    // number locally from 1.
     const mainNumbers = getMoveNumberMap(t2, 9, { fromNodeId: m1Id })!
-    expect(mainNumbers[0]![0]).toBe(1)
-    expect(mainNumbers[1]![1]).toBe(2)
+    expect(mainNumbers[0]![0]).toBeNull() // anchor's own stone — unlabeled
+    expect(mainNumbers[1]![1]).toBe(1)
     const varNumbers = getMoveNumberMap(variation, 9, { fromNodeId: m1Id })!
-    expect(varNumbers[0]![0]).toBe(1)
-    expect(varNumbers[5]![5]).toBe(2)
+    expect(varNumbers[0]![0]).toBeNull()
+    expect(varNumbers[5]![5]).toBe(1)
   })
 
   test('a stone captured after the anchor loses its label; setup stones stay unlabeled', () => {
@@ -474,9 +475,213 @@ describe('getMoveNumberMap — fromNodeId (여기부터 numbering)', () => {
     const t3 = appendMove(t2, [0, 1], 1)
 
     const numbers = getMoveNumberMap(t3, 9, { fromNodeId: anchorId })!
-    expect(numbers[0]![1]).toBe(1) // anchor's stone (x=1, y=0) survives
-    expect(numbers[0]![0]).toBeNull() // W(0,0) captured — no label
-    expect(numbers[1]![0]).toBe(3) // B(0,1) — counter keeps moving through the capture
+    expect(numbers[0]![1]).toBeNull() // anchor's own stone (x=1, y=0) — unlabeled
+    expect(numbers[0]![0]).toBeNull() // W(0,0) — first move after the anchor, but captured
+    expect(numbers[1]![0]).toBe(2) // B(0,1) — counter keeps moving through the capture
     expect(numbers[4]![4]).toBeNull() // setup stone — unlabeled even in view
+  })
+})
+
+describe('appendMove/appendPass — duplicate variation reuse', () => {
+  /** Add a child with raw data under a parent and park the cursor there. */
+  function addChild(
+    tree: ReturnType<typeof createGameTree>,
+    parentId: string | number,
+    data: Record<string, string[]>,
+  ): ReturnType<typeof createGameTree> {
+    const newTree = tree.mutate((draft) => {
+      draft.appendNode(parentId, data)
+    })
+    const parent = newTree.get(parentId)
+    newTree.currentId = parent?.children[parent.children.length - 1]!.id ?? newTree.root.id
+    return newTree
+  }
+
+  test('replaying the same complete line from the root reuses the existing branch', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [3, 3], 1)
+    const t2 = appendMove(t1, [4, 4], -1)
+    const m1Id = String(t1.currentId!)
+    const tipId = String(t2.currentId!)
+
+    const atRoot = navigateToNode(t2, 'root')!
+    const replay1 = appendMove(atRoot, [3, 3], 1)
+    expect(String(replay1.currentId!)).toBe(m1Id) // reused, not a new sibling
+    const replay2 = appendMove(replay1, [4, 4], -1)
+    expect(String(replay2.currentId!)).toBe(tipId)
+
+    // No duplicate branch was created.
+    expect(replay2.root.children).toHaveLength(1)
+    expect(replay2.root.children[0]!.children).toHaveLength(1)
+    expect(getMoveList(replay2)).toEqual([
+      { vertex: [3, 3], sign: 1 },
+      { vertex: [4, 4], sign: -1 },
+    ])
+  })
+
+  test('a continuation replayed from a mid-game node reuses the shared continuation', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [0, 0], 1)
+    const t2 = appendMove(t1, [1, 1], -1)
+    const t3 = appendMove(t2, [2, 2], 1)
+    const m2Id = String(t2.currentId!)
+    const m3Id = String(t3.currentId!)
+
+    const atM1 = navigateToNode(t3, t1.currentId!)!
+    const replayM2 = appendMove(atM1, [1, 1], -1)
+    expect(String(replayM2.currentId!)).toBe(m2Id)
+    const replayM3 = appendMove(replayM2, [2, 2], 1)
+    expect(String(replayM3.currentId!)).toBe(m3Id)
+
+    // m1 still has exactly one child — the shared continuation.
+    const m1Node = replayM3.root.children[0]!
+    expect(m1Node.children).toHaveLength(1)
+    expect(getMoveList(replayM3)).toHaveLength(3)
+  })
+
+  test('a different first move still creates a variation', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [3, 3], 1)
+    const t2 = appendMove(t1, [4, 4], -1)
+
+    const atRoot = navigateToNode(t2, 'root')!
+    const branched = appendMove(atRoot, [5, 5], 1)
+    expect(branched.root.children).toHaveLength(2)
+    expect(getMoveList(branched)).toEqual([{ vertex: [5, 5], sign: 1 }])
+  })
+
+  test('a same-color different move at the same point stays a separate sibling', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [3, 3], 1) // B[dd]
+
+    const atRoot = navigateToNode(t1, 'root')!
+    const branched = appendMove(atRoot, [4, 4], 1) // B[ee] — different coordinate
+    expect(branched.root.children).toHaveLength(2)
+    expect(branched.root.children[0]!.data.B).toEqual(['dd'])
+    expect(branched.root.children[1]!.data.B).toEqual(['ee'])
+    expect(String(branched.currentId!)).toBe(String(branched.root.children[1]!.id))
+  })
+
+  test('a different-color move at the same point stays a separate sibling', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [3, 3], 1) // B[dd]
+
+    const atRoot = navigateToNode(t1, 'root')!
+    const branched = appendMove(atRoot, [3, 3], -1) // W[dd] — same point, other color
+    expect(branched.root.children).toHaveLength(2)
+    expect(branched.root.children[0]!.data.B).toEqual(['dd'])
+    expect(branched.root.children[1]!.data.W).toEqual(['dd'])
+  })
+
+  test('replaying a pass reuses the existing pass node', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [0, 0], 1)
+    const t2 = appendPass(t1, -1)
+    const passId = String(t2.currentId!)
+
+    const atM1 = navigateToNode(t2, t1.currentId!)!
+    const replay = appendPass(atM1, -1)
+    expect(String(replay.currentId!)).toBe(passId)
+    const m1Node = replay.root.children[0]!
+    expect(m1Node.children).toHaveLength(1)
+    expect(m1Node.children[0]!.data.W).toEqual([])
+  })
+
+  test('a pass of the other color is a separate sibling', () => {
+    const tree = createGameTree(9)
+    const t1 = appendPass(tree, 1) // Black pass at the root
+
+    const atRoot = navigateToNode(t1, 'root')!
+    const branched = appendPass(atRoot, -1) // White pass — different color
+    expect(branched.root.children).toHaveLength(2)
+    expect(branched.root.children[0]!.data.B).toEqual([])
+    expect(branched.root.children[1]!.data.W).toEqual([])
+  })
+
+  test('a pass replayed onto an SGF-parsed empty-value pass node is reused', () => {
+    // Some SGF writers store a pass as an empty value (W[]) rather than an
+    // empty list — board-wise it is the same pass, so it must be reused.
+    const tree = sgfToTree('(;FF[4]GM[1]SZ[9];B[aa];W[])')
+    const blackMoveId = String(tree.root.children[0]!.id)
+    const whitePassId = String(tree.root.children[0]!.children[0]!.id)
+
+    const atBlack = navigateToNode(tree, blackMoveId)!
+    const replay = appendPass(atBlack, -1)
+    expect(String(replay.currentId!)).toBe(whitePassId)
+    expect(replay.root.children[0]!.children).toHaveLength(1)
+  })
+
+  test('reuse preserves the comments/annotations on the reused child', () => {
+    const tree = createGameTree(9)
+    const withComment = addChild(tree, 'root', { B: ['dd'], C: ['great move'] })
+    const atRoot = navigateToNode(withComment, 'root')!
+
+    const replayed = appendMove(atRoot, [3, 3], 1)
+    expect(replayed.root.children).toHaveLength(1)
+    const reused = replayed.get(replayed.currentId!)!
+    expect(reused.data.B).toEqual(['dd'])
+    expect(reused.data.C).toEqual(['great move'])
+  })
+
+  test('a child with setup properties (AB) is not reused for a plain move', () => {
+    const tree = createGameTree(9)
+    const withSetupChild = addChild(tree, 'root', { B: ['dd'], AB: ['ee'] })
+    const atRoot = navigateToNode(withSetupChild, 'root')!
+
+    const appended = appendMove(atRoot, [3, 3], 1) // plain B[dd]
+    expect(appended.root.children).toHaveLength(2) // no merge with the AB node
+    expect(appended.root.children[0]!.data.AB).toEqual(['ee'])
+    expect(appended.root.children[1]!.data.B).toEqual(['dd'])
+  })
+
+  test('a child with a player-to-play override is not reused for a plain move', () => {
+    const tree = createGameTree(9)
+    const withTurnOverride = addChild(tree, 'root', { B: ['dd'], PL: ['W'] })
+    const atRoot = navigateToNode(withTurnOverride, 'root')!
+
+    const appended = appendMove(atRoot, [3, 3], 1) // plain B[dd]
+    expect(appended.root.children).toHaveLength(2)
+    expect(appended.root.children[0]!.data.PL).toEqual(['W'])
+    expect(appended.root.children[1]!.data.B).toEqual(['dd'])
+  })
+
+  test('a child with a conflicting second move prop is not reused', () => {
+    const tree = createGameTree(9)
+    const withBothProps = addChild(tree, 'root', { B: ['dd'], W: ['ee'] })
+    const atRoot = navigateToNode(withBothProps, 'root')!
+
+    const appended = appendMove(atRoot, [3, 3], 1) // plain B[dd]
+    expect(appended.root.children).toHaveLength(2)
+  })
+
+  test('reuse does not mutate the input tree and returns a new tree instance', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [3, 3], 1)
+    const t2 = appendMove(t1, [4, 4], -1)
+    const originalTipId = String(t2.currentId!)
+
+    const atRoot = navigateToNode(t2, 'root')!
+    const replay1 = appendMove(atRoot, [3, 3], 1)
+
+    // Fresh identity — React state updates and the autosave effect depend on it.
+    expect(replay1).not.toBe(atRoot)
+    // The input tree is untouched.
+    expect(String(atRoot.currentId!)).toBe(String(atRoot.root.id))
+    expect(t2.root.children).toHaveLength(1)
+    expect(String(t2.currentId!)).toBe(originalTipId)
+  })
+
+  test('already-duplicated branches remain; reuse picks the first match', () => {
+    // Pre-existing duplicates (e.g. from an older SGF) are NOT rewritten —
+    // appending the same move again just reuses the first matching child.
+    const tree = createGameTree(9)
+    const duplicated = tree.mutate((draft) => {
+      draft.appendNode(draft.root.id, { B: ['dd'] })
+      draft.appendNode(draft.root.id, { B: ['dd'] })
+    })
+
+    const replayed = appendMove(duplicated, [3, 3], 1)
+    expect(replayed.root.children).toHaveLength(2) // duplicates remain
+    expect(String(replayed.currentId!)).toBe(String(replayed.root.children[0]!.id))
   })
 })

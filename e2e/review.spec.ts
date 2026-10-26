@@ -41,6 +41,10 @@ function mockEngine(page: Page): void {
   )
 }
 
+function vertexIndex(x: number, y: number, boardSize: number): number {
+  return y * boardSize + x
+}
+
 async function loadVariationsSgf(page: Page): Promise<void> {
   const fileInput = page.locator('input[type="file"]')
   await fileInput.setInputFiles('e2e/fixtures/review-variations.sgf')
@@ -57,16 +61,28 @@ test.describe('Review — move numbers', () => {
 
   test('initially hidden, then all-mode numbers every stone on the line', async ({ page }) => {
     // No numbering until a button is used (full numbering is now the
-    // explicit "전체 번호" mode, not the default).
+    // explicit "전체 수순" mode, not the default).
     await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
+    await expect(page.locator('#move-number-all')).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.locator('#move-number-from-current')).toHaveAttribute('aria-pressed', 'false')
 
     await page.locator('#move-number-all').click()
+    await expect(page.locator('#move-number-all')).toHaveAttribute('aria-pressed', 'true')
 
     // Main line has 5 moves; each surviving stone carries its number label.
     const labels = page.locator('.shudan-marker-label')
     await expect(labels).toHaveCount(5)
     await expect(page.locator('.shudan-marker-label:text-is("1")')).toHaveCount(1)
     await expect(page.locator('.shudan-marker-label:text-is("5")')).toHaveCount(1)
+
+    // While all mode is on, the other toggle is disabled/non-actionable.
+    await expect(page.locator('#move-number-from-current')).toBeDisabled()
+
+    // Re-clicking 전체 수순 turns it off and removes all labels.
+    await page.locator('#move-number-all').click()
+    await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
+    await expect(page.locator('#move-number-all')).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.locator('#move-number-from-current')).toBeEnabled()
   })
 
   test('all-mode labels follow the selected branch and hide at the root', async ({ page }) => {
@@ -78,21 +94,25 @@ test.describe('Review — move numbers', () => {
     await expect(page.locator('.shudan-stone')).toHaveCount(0)
   })
 
-  test('from-current mode numbers the selected node as 1 and hides off-path branches', async ({ page }) => {
-    // Jump to the variation tip (5th move of the W[qe] branch) and anchor
-    // numbering there: only that stone is labeled "1" — earlier stones are
-    // NOT renumbered.
+  test('from-current mode leaves existing stones unlabeled and numbers later moves from 1', async ({ page }) => {
+    // Jump to the variation tip (5th move of the W[qe] branch) and turn on
+    // "번호 표시": stones already on the board stay UNLABELED.
     await page.locator('[data-tree-node]').nth(7).click()
     await expect(page.locator('.playback-counter')).toContainText('Move 5')
     await page.locator('#move-number-from-current').click()
-    await expect(page.locator('.shudan-marker-label')).toHaveCount(1)
-    await expect(page.locator('.shudan-marker-label:text-is("1")')).toHaveCount(1)
-
-    // Re-click turns numbering off.
-    await page.locator('#move-number-from-current').click()
+    await expect(page.locator('#move-number-from-current')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
 
-    // Re-enable "여기부터" here, then jump to the main-line tip: the anchor
+    // The first move played after the press is numbered 1.
+    await page.locator('.shudan-vertex').nth(vertexIndex(9, 9, 19)).click()
+    await expect(page.locator('.shudan-marker-label:text-is("1")')).toHaveCount(1)
+
+    // Re-click turns numbering off and removes the label.
+    await page.locator('#move-number-from-current').click()
+    await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
+    await expect(page.locator('#move-number-from-current')).toHaveAttribute('aria-pressed', 'false')
+
+    // Re-enable "번호 표시" here, then jump to the main-line tip: the anchor
     // is NOT an ancestor of that path → no labels and an off-path hint.
     await page.locator('#move-number-from-current').click()
     await page.locator('[data-tree-node]').nth(4).click()
@@ -100,7 +120,7 @@ test.describe('Review — move numbers', () => {
     await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
     await expect(page.locator('#move-number-anchor-hint')).toContainText('경로 밖')
 
-    // "전체 번호" still works from any position (move 4 → 4 stones).
+    // "전체 수순" still works from any position (move 4 → 4 stones).
     await page.locator('#move-number-all').click()
     await expect(page.locator('.shudan-marker-label')).toHaveCount(4)
     await expect(page.locator('.shudan-marker-label:text-is("4")')).toHaveCount(1)
@@ -109,13 +129,18 @@ test.describe('Review — move numbers', () => {
   test('loading a new SGF resets the numbering mode (no stale anchor)', async ({ page }) => {
     await page.locator('[data-tree-node]').nth(4).click()
     await page.locator('#move-number-from-current').click()
-    await expect(page.locator('.shudan-marker-label')).toHaveCount(1)
+    // Anchor at Move 4: existing stones stay unlabeled until a new move
+    // is played after the press.
+    await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
+    await page.locator('.shudan-vertex').nth(vertexIndex(9, 9, 19)).click()
+    await expect(page.locator('.shudan-marker-label:text-is("1")')).toHaveCount(1)
 
     // Replace the game with the same SGF — node ids are regenerated, so the
     // numbering (and its anchor) must reset to hidden.
     await loadVariationsSgf(page)
     await expect(page.locator('.shudan-marker-label')).toHaveCount(0)
     await expect(page.locator('#move-number-anchor-hint')).toHaveCount(0)
+    await expect(page.locator('#move-number-from-current')).toHaveAttribute('aria-pressed', 'false')
   })
 })
 

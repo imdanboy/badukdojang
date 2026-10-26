@@ -131,6 +131,61 @@ export function findNodeById(
   return visit(tree.root)
 }
 
+/**
+ * SGF properties that affect position or turn. Two move nodes may only be
+ * treated as the same variation when their board-relevant data matches
+ * exactly; setup stones (AB/AW/AE), player-to-play (PL), or a second move
+ * prop keep nodes as separate siblings.
+ */
+const BOARD_PROPS: ReadonlySet<string> = new Set(['B', 'W', 'AB', 'AW', 'AE', 'PL'])
+
+/** A pass value: an empty property list (B[]) or a single empty value (B['']). */
+function isPassValue(values: Primitive[] | undefined): boolean {
+  if (values == null) return false
+  return values.length === 0 || (values.length === 1 && values[0] === '')
+}
+
+/**
+ * True when `data` has no board-changing property other than `prop`.
+ * Comments/annotations (C, GB, UC, …) are not board props — they never
+ * block reuse because the reused node (with them) is kept as is.
+ */
+function hasNoOtherBoardProps(
+  data: Record<string, Primitive[]>,
+  prop: string,
+): boolean {
+  return !Object.keys(data).some((key) => key !== prop && BOARD_PROPS.has(key))
+}
+
+/**
+ * Find an existing child of `parentId` that represents exactly the same
+ * board action as the move/pass about to be appended, so replaying a line
+ * reuses it instead of creating a duplicate sibling variation.
+ */
+function findReusableChild(
+  tree: GameTree,
+  parentId: string | number,
+  prop: 'B' | 'W',
+  matches: (data: Record<string, Primitive[]>, prop: 'B' | 'W') => boolean,
+): GameTreeNode | null {
+  const parentNode = tree.get(parentId)
+  return (
+    parentNode?.children.find((child) => matches(child.data, prop)) ?? null
+  )
+}
+
+/**
+ * Append a move node under the current node and move the cursor onto it.
+ * When the current node already has a child representing the EXACT same
+ * move — same color, same SGF coordinate, no extra board-changing
+ * properties — that child is reused instead of creating a duplicate
+ * sibling variation: its whole subtree and annotations are preserved and
+ * the cursor is set to it. Genuinely different moves (other coordinate,
+ * other color, setup properties) still append a separate sibling.
+ *
+ * Returns a NEW tree (the input is never mutated) so React state updates
+ * and the autosave effect observe an identity change even on reuse.
+ */
 export function appendMove(
   tree: GameTree,
   vertex: Vertex,
@@ -139,6 +194,21 @@ export function appendMove(
   const currentId = tree.currentId ?? tree.root.id
   const prop = sign === 1 ? 'B' : 'W'
   const coord = vertexToSgf(vertex)
+
+  const reused = findReusableChild(tree, currentId, prop, (data, p) => {
+    const values = data[p]
+    return (
+      values != null &&
+      values.length === 1 &&
+      values[0] === coord &&
+      hasNoOtherBoardProps(data, p)
+    )
+  })
+  if (reused != null) {
+    const newTree = cloneTree(tree)
+    newTree.currentId = reused.id
+    return newTree
+  }
 
   const newTree = tree.mutate((draft) => {
     draft.appendNode(currentId, { [prop]: [coord] })
@@ -151,9 +221,24 @@ export function appendMove(
   return newTree
 }
 
+/**
+ * Append a pass node under the current node and move the cursor onto it.
+ * Like appendMove, an existing child that is the same color's pass (with
+ * no extra board-changing properties) is reused — cursor set onto it,
+ * subtree/annotations preserved — instead of creating a duplicate sibling.
+ */
 export function appendPass(tree: GameTree, sign: number): GameTree {
   const currentId = tree.currentId ?? tree.root.id
   const prop = sign === 1 ? 'B' : 'W'
+
+  const reused = findReusableChild(tree, currentId, prop, (data, p) => {
+    return isPassValue(data[p]) && hasNoOtherBoardProps(data, p)
+  })
+  if (reused != null) {
+    const newTree = cloneTree(tree)
+    newTree.currentId = reused.id
+    return newTree
+  }
 
   const newTree = tree.mutate((draft) => {
     draft.appendNode(currentId, { [prop]: [] })
@@ -343,12 +428,12 @@ export function getMoveList(
  */
 export interface MoveNumberOptions {
   /**
-   * "여기부터" numbering: move nodes at/after this node are numbered 1, 2, …
-   * (the anchor's own move is 1; a root anchor makes the next move 1). The
-   * anchor must lie on the current path (root → cursor) — when the cursor
-   * leaves the anchor's subtree (off-path/sibling branch) NO labels are
-   * produced at all, so another branch can never be mislabeled from a stale
-   * anchor.
+   * "번호 표시" numbering: move nodes AFTER this node are numbered 1, 2, …
+   * (the anchor's own stone — everything already on the board when the
+   * button was pressed — stays unlabeled). The anchor must lie on the
+   * current path (root → cursor) — when the cursor leaves the anchor's
+   * subtree (off-path/sibling branch) NO labels are produced at all, so
+   * another branch can never be mislabeled from a stale anchor.
    */
   fromNodeId?: string | number | null
 }
@@ -364,9 +449,10 @@ export interface MoveNumberOptions {
  * history moves are skipped), so a label always sits on a stone the board
  * actually shows.
  *
- * Without options the whole path is numbered ("전체 번호" mode). With
- * `fromNodeId` the counter starts at the anchor node; when the anchor is
- * not on the current path the function returns null ("no labels").
+ * Without options the whole path is numbered ("전체 수순" mode). With
+ * `fromNodeId` ("번호 표시" mode) the counter starts at the node AFTER the
+ * anchor — stones already on the board stay unlabeled — and when the anchor
+ * is not on the current path the function returns null ("no labels").
  */
 export function getMoveNumberMap(
   tree: GameTree,
@@ -383,9 +469,10 @@ export function getMoveNumberMap(
   let board = GoBoard.fromDimensions(size, size)
   let moveNumber = 0
 
-  // Anchor mode: numbering starts at the anchor node's index along the
-  // path; the nodes before it are still replayed (board state) but produce
-  // no labels or counter — numbering restarts at 1 from the anchor.
+  // Anchor mode: numbering starts at the node AFTER the anchor along the
+  // path — the anchor itself and everything before it are still replayed
+  // (board state) but produce no labels or counter, so stones already on
+  // the board at press time stay unlabeled.
   let anchorIndex = -1
   if (fromNodeId != null) {
     const target = String(fromNodeId)
@@ -395,7 +482,7 @@ export function getMoveNumberMap(
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]!
-    const numbering = fromNodeId == null || i >= anchorIndex
+    const numbering = fromNodeId == null || i > anchorIndex
     const data = node.data as { B?: string[]; W?: string[]; AB?: string[]; AW?: string[] }
 
     for (const coord of data.AB ?? []) {
