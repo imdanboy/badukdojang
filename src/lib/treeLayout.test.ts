@@ -120,6 +120,37 @@ describe('layoutGameTree', () => {
     expect(pass.moveNumber).toBe(3)
   })
 
+  test('move nodes carry their player sign; passes stay numbered', () => {
+    let tree = createGameTree(9)
+    tree = appendMove(tree, [0, 0], 1) // black 1
+    tree = appendMove(tree, [1, 1], -1) // white 2
+    tree = appendPass(tree, 1) // black 3 but a pass
+
+    const layout = layoutGameTree(tree)
+    const [m1, m2, pass] = [
+      layout.byId.get(String(tree.root.children[0]!.id))!,
+      layout.byId.get(String(tree.root.children[0]!.children[0]!.id))!,
+      layout.byId.get(String(tree.currentId!))!,
+    ]
+    // Stone-player info for the node rendering (black vs white fill).
+    expect(m1.moveSign).toBe(1)
+    expect(m2.moveSign).toBe(-1)
+    expect(m1.isPass).toBe(false)
+    // Passes are numbered like any other move but render neutrally.
+    expect(pass.moveNumber).toBe(3)
+    expect(pass.moveSign).toBe(1)
+    expect(pass.isPass).toBe(true)
+
+    // Root and non-move nodes are never move stones.
+    const withComment = sgfToTree('(;FF[4]GM[1]SZ[9];B[aa];C[hi];W[bb])')
+    const commentLayout = layoutGameTree(withComment)
+    const [root, , comment] = commentLayout.nodes
+    expect(root?.moveSign).toBeNull()
+    expect(root?.isPass).toBe(false)
+    expect(comment?.moveNumber).toBeNull()
+    expect(comment?.moveSign).toBeNull()
+  })
+
   test('a comment-only node between moves does not restart move numbering', () => {
     // root → m1 → comment-only node → m2 (valid SGF main-line shape).
     let tree = createGameTree(9)

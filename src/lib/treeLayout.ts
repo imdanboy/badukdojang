@@ -69,6 +69,10 @@ export interface TreeLayoutNode {
   readonly onPath: boolean
   /** 1-based move number along this node's own path; null for non-move nodes. */
   readonly moveNumber: number | null
+  /** Sign of this node's move (1 black, -1 white); null for non-move nodes. */
+  readonly moveSign: 1 | -1 | null
+  /** True when the node's own move is a pass (numbered neutral node). */
+  readonly isPass: boolean
 }
 
 export interface TreeLayout {
@@ -152,6 +156,8 @@ export function layoutGameTree(
       row,
       onPath: pathIds.has(id),
       moveNumber: move !== null ? ownPly : null,
+      moveSign: move !== null ? move.sign : null,
+      isPass: move !== null && move.vertex === 'pass',
     }
     nodes.push(layoutNode)
     byId.set(id, layoutNode)

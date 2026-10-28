@@ -33,6 +33,7 @@ body {
 #app {
   min-height: 100vh;
   min-height: 100svh;
+  min-height: 100dvh;
   width: 100%;
   display: block;
   background: var(--bg, #ffffff);
@@ -46,7 +47,14 @@ body {
   }
 }
 
-/* --- App shell ------------------------------------------------------------- */
+/* --- App shell --------------------------------------------------------------
+ *
+ * ONE-SCREEN shell on every viewport: #app-root is exactly one dynamic
+ * viewport tall and NEVER scrolls at page level (overflow: hidden). The
+ * only vertical scrollers are designated panels:
+ *   - .side-col (right functions / playback + primary actions)
+ *   - the game-tree panel inside the dock (both axes), when toggled on.
+ */
 
 #app-root {
   display: flex;
@@ -57,7 +65,10 @@ body {
      Falls back naturally to full width on smaller screens. */
   max-width: 1720px;
   margin: 0 auto;
-  min-height: 100svh;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  overflow: hidden;
   padding: 12px 16px 20px;
 }
 
@@ -73,6 +84,9 @@ body {
   border-radius: 8px;
   color: #e0e0e0;
   flex-wrap: wrap;
+  /* The top bar must keep its natural height — the stage (not the bar)
+     absorbs the height changes from the resizable tree dock. */
+  flex: 0 0 auto;
 }
 
 .top-bar-left {
@@ -107,23 +121,35 @@ body {
   gap: 6px;
 }
 
-/* --- Game layout (rail | board | functions) ----------------------------------
+/* --- Game stage (top bar + game columns) --------------------------------------
  *
- * Default (narrow / mobile portrait): single column — board first, then the
- * right column (playback + primary actions) directly below the board, so
- * every control stays reachable without overflow.
- *
- * ≥1024px (desktop / tablet landscape): three columns — a reserved narrow
- * left rail (content TBD, intentionally empty), the board column that takes
- * the remaining space, and the function column (playback + sidebar).
+ * `.stage` is the flexible board-first section of the one-screen shell.
+ * When the game-tree dock is open it keeps a fixed pixel height, so the
+ * stage (and with it the board's measured slot) shrinks by exactly the
+ * dock height + gap; closing the dock gives the stage the full height
+ * back. Board.tsx re-measures the slot in both dimensions, so the board
+ * always fits whatever the stage has left.
+ * Mobile (single column, flex): the board column is content-sized
+ * (width-bound square) but SHRINKABLE — when the dock grows and the height
+ * becomes limiting, the board column gives up height and the board becomes
+ * height-bound, while the controls column keeps a scrollable floor.
  */
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Mobile/tablet-portrait: column flex so BOTH rows shrink when the tree
+   dock takes height. The board column keeps its natural (width-bound)
+   height when there is room and shrinks only when the height budget is
+   exceeded; the controls column absorbs the rest with a scrollable floor. */
 .game-layout {
-  display: grid;
-  /* minmax(0, 1fr): the board column must never push the track wider than
-     the viewport (a plain 1fr track grows to content min-width → overflow). */
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: start;
   flex: 1;
   min-height: 0;
 }
@@ -137,13 +163,79 @@ body {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  /* The ONLY app-level vertical scroller: on every viewport the right
+     functions column scrolls internally instead of growing the page.
+     flex: 1 1 0% takes the height left over by the board column, floored
+     so primary controls stay reachable (scrolled) on short viewports. */
+  flex: 1 1 0%;
+  min-height: min(120px, 25dvh);
+  overflow-y: auto;
+}
+
+/* Game-tree dock (bottom, toggle-only) + its full-width tree section. */
+.tree-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.tree-section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Vertical resize handle between the stage and the tree dock: a visible
+   separator bar with a grab-pill. Pointer (mouse/touch/pen) + keyboard
+   operated; see App.tsx for the drag/keyboard logic. touch-action: none
+   lets touch drags move the handle instead of scrolling the page. */
+.tree-resizer {
+  flex: 0 0 auto;
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: #23233c;
+  border: 1px solid #3b3b5c;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.tree-resizer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 42px;
+  height: 4px;
+  border-radius: 2px;
+  background: #5a7fb5;
+  opacity: 0.7;
+}
+
+.tree-resizer:hover::after,
+.tree-resizer:focus-visible::after {
+  opacity: 1;
+}
+
+.tree-resizer[data-dragging='true'] {
+  background: #2d2d52;
+  border-color: #5a7fb5;
+}
+
+.tree-resizer:focus-visible {
+  outline: 2px solid #5a7fb5;
+  outline-offset: 2px;
 }
 
 @media (min-width: 1024px) {
+  /* Desktop: back to the 3-column grid; one row takes exactly the leftover
+     height so the board column really stretches (the shell is a fixed-height
+     one-screen app). */
   .game-layout {
+    display: grid;
     grid-template-columns: 64px minmax(0, 1fr) 340px;
-    /* One row that takes exactly the leftover height so the board column
-       really stretches (App shell below is a fixed-height viewport app). */
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     min-height: 0;
@@ -154,32 +246,17 @@ body {
     min-height: 1px;
   }
 
-  /* Fixed-height desktop shell: the board column gets the TRUE leftover
-     height (measured by Board.tsx instead of a guessed 100dvh-160px), so
-     the board fills the largest square fitting both column dimensions. */
-  #app-root {
-    height: 100vh;
-    height: 100dvh;
-    overflow: hidden;
-  }
-
   .board-col {
     justify-content: center;
     min-height: 0;
   }
 
-  /* Stretch to the row height so ResizeObserver measures the real slot. */
-  .board-container {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  /* The right function column scrolls internally on short desktop windows
-     (with the sticky playback bar first) instead of squeezing the board. */
+  /* Grid item again on desktop: keep the flex sizing from affecting it. */
   .side-col {
     align-self: stretch;
-    overflow-y: auto;
+    flex: initial;
     min-height: 0;
+    overflow-y: auto;
   }
 }
 
@@ -189,13 +266,28 @@ body {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  /* Content-sized but shrinkable: flex-basis auto keeps the width-bound
+     natural height when there is room; flex-shrink gives height back to
+     the tree dock when the viewport runs out. (Grid items on desktop and
+     zen ignore the flex properties.) */
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+/* Stretch to the column height so ResizeObserver measures the real slot —
+   on desktop (stretched grid row) AND on mobile (shrinkable flex column). */
+.board-container {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Board sizing is JS-driven: Board.tsx measures this slot's content box
    (width AND height) with ResizeObserver and renders the largest square
-   that fits both — no guessed fixed height deduction. On desktop this slot
-   is stretched to the true leftover column height (see @media below); on
-   mobile it is content-sized and width-bound, so no horizontal overflow. */
+   that fits both — no guessed fixed height deduction. On desktop the slot
+   is stretched to the true leftover column height of the stage (which the
+   tree dock shrinks when open); on mobile the slot is the board column's
+   shrinkable height, so the square is width-bound when roomy and
+   height-bound (smaller) once the dock makes height the limiting axis. */
 
 /* --- Playback bar (inside the right function column) ------------------------- */
 
@@ -283,30 +375,34 @@ body {
   pointer-events: none;
 }
 
-/* --- Zen mode (board only) --------------------------------------------------- */
+/* --- Zen mode (board only) ---------------------------------------------------
+ * Zen hides the top bar, the function columns and the tree dock (the dock
+ * only renders outside zen), leaving the board-first stage at full height. */
 
 #app-root.zen-mode {
   justify-content: center;
   align-items: center;
 }
 
+/* align-items:center shrink-to-fits the stage; zen mode is board-only, so
+   keep it stretched to the full content width. */
+#app-root.zen-mode .stage {
+  width: 100%;
+}
+
 #app-root.zen-mode .game-layout {
-  grid-template-columns: 1fr;
-  /* One full-height row so the board slot can be measured/stretched too. */
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
+  /* Board-only: drop the desktop grid (its 64px rail track would claim the
+     board) and use the single flex column, which fills the stage height. */
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-height: 0;
 }
 
 #app-root.zen-mode .board-col {
   justify-content: center;
-  flex: 1;
-  min-height: 0;
-}
-
-#app-root.zen-mode .board-container {
-  flex: 1 1 auto;
+  /* Grow to the full stage height (overrides the shrinkable base rule). */
+  flex: 1 1 0%;
   min-height: 0;
 }
 
@@ -430,4 +526,9 @@ body {
 .game-tree-panel [role='button']:focus {
   outline: 1px solid #5a7fb5;
   outline-offset: 1px;
+}
+
+/* In-node move numbers are decorative duplicates of the accessible label. */
+.game-tree-panel text {
+  user-select: none;
 }

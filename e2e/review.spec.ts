@@ -51,12 +51,19 @@ async function loadVariationsSgf(page: Page): Promise<void> {
   await page.waitForTimeout(300)
 }
 
+/** The tree dock is hidden by default — open it for node interaction. */
+async function openTreeDock(page: Page): Promise<void> {
+  await page.locator('#tree-toggle').click()
+  await expect(page.locator('[data-testid="game-tree-panel"]')).toHaveCount(1)
+}
+
 test.describe('Review — move numbers', () => {
   test.beforeEach(async ({ page }) => {
     await mockEngine(page)
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
     await loadVariationsSgf(page)
+    await openTreeDock(page)
   })
 
   test('initially hidden, then all-mode numbers every stone on the line', async ({ page }) => {
@@ -150,6 +157,7 @@ test.describe('Review — game tree navigation', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
     await loadVariationsSgf(page)
+    await openTreeDock(page)
   })
 
   test('tree shows every node of the game incl. variations', async ({ page }) => {
@@ -158,6 +166,100 @@ test.describe('Review — game tree navigation', () => {
     // The current node (main-line tip) is marked.
     const current = page.locator('[data-tree-node][data-on-path="true"]')
     expect(await current.count()).toBeGreaterThanOrEqual(5)
+  })
+
+  test('tree dock opens from the review toggle and spans the app width', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.reload()
+    await page.waitForSelector('.shudan-goban')
+
+    // Hidden again after a reload (no stale dock), then toggled on.
+    await expect(page.locator('[data-testid="game-tree-panel"]')).toHaveCount(0)
+    await loadVariationsSgf(page)
+    await openTreeDock(page)
+
+    // No duplication: one tree, and it is NOT inside the review panel.
+    await expect(page.locator('[data-testid="game-tree-panel"]')).toHaveCount(1)
+    await expect(page.locator('.review-panel [data-testid="game-tree-panel"]')).toHaveCount(0)
+
+    const m = await page.evaluate(() => {
+      const board = document.querySelector('.board-container')!.getBoundingClientRect()
+      const panel = document.querySelector('[data-testid="game-tree-panel"]')!.getBoundingClientRect()
+      const review = document.querySelector('.review-panel')!.getBoundingClientRect()
+      return {
+        panelTop: panel.top,
+        boardBottom: board.bottom,
+        panelWidth: panel.width,
+        reviewWidth: review.width,
+      }
+    })
+    // Docked below the board, wider than the sidebar review panel.
+    expect(m.panelTop).toBeGreaterThanOrEqual(m.boardBottom + 8)
+    expect(m.panelWidth).toBeGreaterThan(m.reviewWidth + 10)
+  })
+
+  test('moves render as numbered black/white stone nodes; root/meta unnumbered', async ({ page }) => {
+    const m = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll('[data-tree-node]')]
+      const black = document.querySelectorAll('[data-stone-black="true"]').length
+      const white = document.querySelectorAll('[data-stone-white="true"]').length
+      const numbered = document.querySelectorAll('.game-tree-panel .tree-node-number').length
+      const rootCount = nodes
+        .map((n) => n.getAttribute('data-node-kind'))
+        .filter((k) => k === 'root').length
+      return { total: nodes.length, black, white, numbered, rootCount }
+    })
+    // 7 moves: B,W,B,W,B + variation B,B → 4 black, 3 white stones.
+    expect(m.total).toBe(8) // root + 7 moves
+    expect(m.black).toBe(4)
+    expect(m.white).toBe(3)
+    // Every move node (passes included) carries its in-node number.
+    expect(m.numbered).toBe(7)
+    expect(m.rootCount).toBe(1)
+
+    // The first node is the (unnumbered) root; the first move is a black
+    // stone node labeled "1".
+    const first = page.locator('[data-tree-node]').first()
+    await expect(first).toHaveAttribute('data-node-kind', 'root')
+    const firstMove = page.locator('[data-tree-node="1"]')
+    await expect(firstMove.locator('.tree-node-number')).toHaveText('1')
+    await expect(firstMove.locator('[data-stone-black="true"]')).toHaveCount(1)
+  })
+
+  test('long games scroll inside the tree; navigation auto-scrolls to the node', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.reload()
+    await page.waitForSelector('.shudan-goban')
+    await openTreeDock(page)
+    const fileInput = page.locator('input[type="file"]')
+    await fileInput.setInputFiles('e2e/fixtures/review-long-line.sgf')
+    await page.waitForTimeout(300)
+
+    // Jump to the root first so the cursor is in view at the far LEFT,
+    // then navigate to the LAST node: the panel must scroll horizontally
+    // to keep the current node visible (auto-scroll).
+    await page.locator('#playback-first').click()
+    const atStart = await page.evaluate(() => {
+      const panel = document.querySelector('[data-testid="game-tree-panel"]') as HTMLElement
+      return { scrollLeft: panel.scrollLeft }
+    })
+    expect(atStart.scrollLeft).toBeLessThan(10)
+
+    await page.locator('#playback-last').click()
+    await expect(page.locator('.playback-counter')).toContainText('Move 80')
+
+    const after = await page.evaluate(() => {
+      const panel = document.querySelector('[data-testid="game-tree-panel"]') as HTMLElement
+      return {
+        scrollLeft: panel.scrollLeft,
+        scrollWidth: panel.scrollWidth,
+        clientWidth: panel.clientWidth,
+      }
+    })
+    expect(after.scrollWidth).toBeGreaterThan(after.clientWidth)
+    expect(after.scrollLeft).toBeGreaterThan(100)
   })
 
   test('clicking a variation node navigates board, counter, turn and branch', async ({ page }) => {
@@ -192,6 +294,7 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
     await page.goto('/')
     await page.waitForSelector('.shudan-goban')
     await loadVariationsSgf(page)
+    await openTreeDock(page)
     // Enable the engine so the batch can run.
     await page.locator('#settings-button').click()
     await page.locator('#engine-toggle').click()
@@ -252,13 +355,16 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
     await page.reload()
     await page.waitForSelector('.shudan-goban')
     await loadVariationsSgf(page)
+    await openTreeDock(page)
 
-    const overflowX =
-      await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      )
-    expect(overflowX).toBeLessThanOrEqual(0)
+    const pageState = await page.evaluate(() => ({
+      overflowX:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflowY:
+        document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    }))
+    expect(pageState.overflowX).toBeLessThanOrEqual(0)
+    expect(pageState.overflowY).toBeLessThanOrEqual(0)
     // Tree panel scrolls internally instead of blowing up the layout.
     const treePanel = page.locator('[data-testid="game-tree-panel"]')
     await expect(treePanel).toBeVisible()

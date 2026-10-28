@@ -509,6 +509,62 @@ describe('App layout — three columns, playback in the right function column', 
     expect(rail!.textContent).toBe('')
   })
 
+  test('game-tree dock is hidden by default; the review toggle shows it with a resizer', () => {
+    render(<App />)
+
+    // Hidden by default (one-screen layout — no tree until requested).
+    expect(document.querySelector('[data-testid="tree-dock"]')).toBeNull()
+    const toggle = document.getElementById('tree-toggle') as HTMLButtonElement
+    expect(toggle).toBeTruthy()
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+    // Toggle on: one dock holding the one tree panel + a separator handle.
+    fireEvent.click(toggle)
+    const dock = document.querySelector('[data-testid="tree-dock"]')!
+    expect(dock).toBeTruthy()
+    const panel = dock.querySelector('[data-testid="game-tree-panel"]')!
+    expect(panel).toBeTruthy()
+    expect(document.querySelectorAll('.tree-resizer').length).toBe(1)
+    expect(
+      (document.getElementById('tree-toggle') as HTMLButtonElement).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true')
+
+    // Still exactly ONE tree view, outside the game layout/review panel.
+    expect(document.querySelectorAll('[data-testid="game-tree-panel"]').length).toBe(1)
+    expect(panel.closest('.review-panel')).toBeNull()
+    expect(document.querySelector('.game-layout')!.contains(panel)).toBe(false)
+
+    // Toggle off: dock (and the tree with it) disappears entirely.
+    fireEvent.click(document.getElementById('tree-toggle')!)
+    expect(document.querySelector('[data-testid="tree-dock"]')).toBeNull()
+  })
+
+  test('tree dock resizer supports keyboard resizing within its bounds', () => {
+    render(<App />)
+    fireEvent.click(document.getElementById('tree-toggle')!)
+
+    const resizer = document.querySelector('.tree-resizer') as HTMLElement
+    expect(resizer.getAttribute('role')).toBe('separator')
+    expect(resizer.getAttribute('tabindex')).toBe('0')
+    const before = Number(resizer.getAttribute('aria-valuenow'))
+
+    fireEvent.keyDown(resizer, { key: 'ArrowUp' })
+    const grown = Number(resizer.getAttribute('aria-valuenow'))
+    expect(grown).toBeGreaterThan(before)
+
+    // End jumps to the minimum bound; Home to the maximum bound.
+    fireEvent.keyDown(resizer, { key: 'End' })
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBe(
+      Number(resizer.getAttribute('aria-valuemin')),
+    )
+    fireEvent.keyDown(resizer, { key: 'Home' })
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBe(
+      Number(resizer.getAttribute('aria-valuemax')),
+    )
+  })
+
   test('playback next/last navigate after undoing a move', async () => {
     render(<App />)
 
@@ -858,6 +914,9 @@ describe('Review — move-number display modes', () => {
   test('branch navigation: a sibling branch outside the anchor subtree shows no labels', async () => {
     render(<App />)
 
+    // Open the tree dock (hidden by default) for node navigation.
+    fireEvent.click(document.getElementById('tree-toggle')!)
+
     // Main line m1(3,3) m2(4,4) m3(5,5); fork a variation from m2.
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -991,6 +1050,9 @@ describe('Review — game tree navigation', () => {
   test('tree shows the full structure; clicking a node navigates the board', async () => {
     render(<App />)
 
+    // Open the tree dock (hidden by default in the one-screen layout).
+    fireEvent.click(document.getElementById('tree-toggle')!)
+
     // m1 → m2 → m3, then explore a second m2 (variation).
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -998,9 +1060,26 @@ describe('Review — game tree navigation', () => {
     fireEvent.click(screen.getByText('Undo'))
     await clickVertex(6, 6, 19)
 
-    const panel = document.querySelector('[data-testid="game-tree-panel"]')!
+    // Exactly ONE tree view, and it lives OUTSIDE the review panel (it is
+    // rendered full width below the 3-column game area, not in the sidebar).
+    const panels = document.querySelectorAll('[data-testid="game-tree-panel"]')
+    expect(panels.length).toBe(1)
+    const panel = panels[0]!
+    expect(panel.closest('.review-panel')).toBeNull()
+    expect(panel.closest('.game-layout')).toBeNull()
+    const section = panel.closest('.tree-section')
+    expect(section).not.toBeNull()
+    // The tree section sits OUTSIDE the game layout (below the 3 columns).
+    const layout = document.querySelector('.game-layout')!
+    expect(layout.contains(panel)).toBe(false)
+
     // root + m1 + m2 + m3 + m2' = 5 nodes
     expect(panel.querySelectorAll('[data-tree-node]').length).toBe(5)
+
+    // Moves render as numbered stone nodes; the root stays unnumbered.
+    expect(panel.querySelector('[data-tree-node="0"] .tree-node-number')!.textContent).toBe('1')
+    expect(panel.querySelector('[data-tree-node="1"] .tree-node-number')!.textContent).toBe('2')
+    expect(panel.querySelector('[data-tree-node="root"] .tree-node-number')).toBeNull()
 
     // Click the main-line tip (m3): Move 3, White to play.
     const m3Node = panel.querySelector('[data-tree-node="2"]')!
@@ -1027,6 +1106,9 @@ describe('Review — game tree navigation', () => {
 
   test('undo/redo stay consistent after tree navigation; autosave keeps the cursor', async () => {
     render(<App />)
+
+    // Open the tree dock (hidden by default in the one-screen layout).
+    fireEvent.click(document.getElementById('tree-toggle')!)
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -1075,6 +1157,9 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
   test('analyzes all branches with progress, then charts the selected branch', async () => {
     render(<App />)
     enableEngine()
+
+    // Open the tree dock (hidden by default) for node navigation.
+    fireEvent.click(document.getElementById('tree-toggle')!)
 
     // 3 main-line moves + 1 variation after move 2 → 4 positions.
     await clickVertex(3, 3, 19)

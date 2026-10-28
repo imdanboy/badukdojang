@@ -1,27 +1,26 @@
 /*
- * ReviewPanel — "리뷰" section of the right function column (Feature A + B):
- *   1. Complete SGF game-tree visualization with variation navigation.
- *   2. Full-tree batch analysis (전체 분석) with progress + prominent cancel.
- *   3. Winrate graph of the currently selected branch (click = navigate).
- *   4. 수 번호 표시 모드 — 놓아보기 전용: "전체 수순"(현재 경로 1부터)과
+ * ReviewPanel — "리뷰" section of the right function column:
+ *   1. Full-tree batch analysis (전체 분석) with progress + prominent cancel.
+ *   2. Winrate graph of the currently selected branch (click = navigate).
+ *   3. 수 번호 표시 모드 — 놓아보기 전용: "전체 수순"(현재 경로 1부터)과
  *      "번호 표시"(선택 노드 이후 착수만 1로, 이미 놓인 돌은 무번호).
  *      같은 버튼 재클릭 = 끄기. 전체 수순이 켜진 동안 번호 표시는 비활성.
+ *   4. 기보 트리 토글 — the game-tree dock at the bottom of the shell is
+ *      hidden by default; this button shows/hides it (one-screen layout).
  *
- * Compact: everything scrolls/bounds itself so the existing function column
- * (which scrolls internally on short desktop) and mobile layouts stay intact.
+ * The game-tree visualization itself is NOT here — it renders in the
+ * bottom dock (.tree-dock in App) so long lines and variations get the
+ * entire app content width. Exactly one tree view exists.
  * Visual language matches the other panels (#1a1a2e / #3b3b5c / #5a7fb5).
  */
 import type { GameState } from '../lib/gameState.ts'
 import type { WinratePoint } from '../lib/treeLayout.ts'
 import type { TreeAnalysisState } from '../hooks/useTreeAnalysis.ts'
 import type { GameMode, MoveNumberMode } from '../lib/types.ts'
-import { GameTreePanel } from './GameTreePanel.tsx'
 import { WinrateGraph } from './WinrateGraph.tsx'
 
 export interface ReviewPanelProps {
   gameState: GameState
-  /** Bumped by the parent on every tree change/navigation. */
-  moveVersion: number
   gameMode: GameMode
   engineEnabled: boolean
   treeAnalysis: TreeAnalysisState & {
@@ -35,8 +34,10 @@ export interface ReviewPanelProps {
   moveNumberLabelsVisible: boolean
   /** 'all' | 'fromCurrent' 요청 — 활성 버튼 재클릭(끄기)도 이 콜백이 처리한다. */
   onMoveNumberModeSelect: (mode: Exclude<MoveNumberMode, 'hidden'>) => void
-  onTreeNodeClick: (nodeId: string) => void
   onGraphNodeClick: (nodeId: string) => void
+  /** 기보 트리 독(dock) 표시 여부 — 기본 숨김, 토글 버튼으로만 등장. */
+  treeVisible: boolean
+  onToggleTree: () => void
 }
 
 const panelStyle: React.CSSProperties = {
@@ -95,7 +96,6 @@ function statusText(state: TreeAnalysisState): string | null {
 
 export function ReviewPanel({
   gameState,
-  moveVersion,
   gameMode,
   engineEnabled,
   treeAnalysis,
@@ -103,8 +103,9 @@ export function ReviewPanel({
   moveNumberMode,
   moveNumberLabelsVisible,
   onMoveNumberModeSelect,
-  onTreeNodeClick,
   onGraphNodeClick,
+  treeVisible,
+  onToggleTree,
 }: ReviewPanelProps) {
   const isRunning = treeAnalysis.status === 'running'
   const completed = treeAnalysis.completed
@@ -127,30 +128,47 @@ export function ReviewPanel({
         }}
       >
         <span style={titleStyle}>리뷰</span>
-        {isRunning ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
           <button
-            id="tree-analysis-cancel"
-            style={cancelBtnStyle}
-            onClick={treeAnalysis.cancel}
-            title="전체 분석 취소"
+            id="tree-toggle"
+            style={smallBtnStyle(treeVisible, false)}
+            aria-pressed={treeVisible}
+            title="기보 트리를 화면 아래에 열거나 닫습니다"
+            onClick={onToggleTree}
           >
-            취소
+            기보 트리
           </button>
-        ) : (
-          <button
-            id="tree-analysis-start"
-            style={smallBtnStyle(false, !engineEnabled)}
-            disabled={!engineEnabled}
-            onClick={treeAnalysis.start}
-            title={
-              engineEnabled
-                ? '기보 트리의 모든 착수 국면을 분석합니다'
-                : '엔진이 꺼져 있습니다'
-            }
-          >
-            전체 분석
-          </button>
-        )}
+          {isRunning ? (
+            <button
+              id="tree-analysis-cancel"
+              style={cancelBtnStyle}
+              onClick={treeAnalysis.cancel}
+              title="전체 분석 취소"
+            >
+              취소
+            </button>
+          ) : (
+            <button
+              id="tree-analysis-start"
+              style={smallBtnStyle(false, !engineEnabled)}
+              disabled={!engineEnabled}
+              onClick={treeAnalysis.start}
+              title={
+                engineEnabled
+                  ? '기보 트리의 모든 착수 국면을 분석합니다'
+                  : '엔진이 꺼져 있습니다'
+              }
+            >
+              전체 분석
+            </button>
+          )}
+        </div>
       </div>
 
       {isRunning && (
@@ -253,12 +271,6 @@ export function ReviewPanel({
           )}
         </div>
       )}
-
-      <GameTreePanel
-        tree={gameState.gameTree}
-        moveVersion={moveVersion}
-        onNodeClick={onTreeNodeClick}
-      />
 
       <WinrateGraph
         points={winratePoints}

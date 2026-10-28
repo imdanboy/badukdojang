@@ -8,6 +8,17 @@
  * lives in SettingsModal; per-game setup (size, mode, difficulty) in
  * NewGameModal. Zen mode hides everything but the board.
  *
+ * ONE-SCREEN shell: `#app-root` is exactly one dynamic viewport tall and
+ * never scrolls at page level. The game-tree visualization (GameTreePanel)
+ * is hidden by default and toggled from the ReviewPanel; while visible it
+ * docks at the BOTTOM of the shell (.tree-dock) with a fixed pixel height,
+ * so the .stage above flex-shrinks by exactly that amount and Board.tsx
+ * re-measures the smaller slot — board and tree share the same viewport.
+ * The dock is vertically resizable via a pointer/touch/keyboard separator
+ * (.tree-resizer); the tree panel scrolls internally on both axes. The
+ * tree is the ONE tree view in the app; the ReviewPanel keeps analysis
+ * runs, 수-번호 buttons, and the winrate graph.
+ *
  * Game flow state lives here; engine lifecycle in useEngine, analysis
  * polling in useAnalysis, scoring flow in useScoring.
  */
@@ -20,6 +31,7 @@ import { TopBar } from './components/TopBar.tsx'
 import { GameSidebar } from './components/GameSidebar.tsx'
 import { PlaybackBar } from './components/PlaybackBar.tsx'
 import { ReviewPanel } from './components/ReviewPanel.tsx'
+import { GameTreePanel } from './components/GameTreePanel.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
 import { NewGameModal } from './components/NewGameModal.tsx'
 import type { NewGameConfig } from './components/NewGameModal.tsx'
@@ -65,6 +77,39 @@ import {
 import * as katagoAdapter from './lib/engine/katagoAdapter.ts'
 import { EngineError } from './lib/engine/types.ts'
 
+// --- One-screen tree dock sizing ---------------------------------------------
+// The dock is a fixed-pixel bottom region; the stage above flex-shrinks by
+// the same amount (flex: 1 1 auto + min-height: 0), so board and tree always
+// share one viewport without page-level scroll. Bounds keep a useful board
+// even on short viewports; window.innerHeight (dynamic viewport height, incl.
+// mobile URL-bar changes) is read at drag time and re-clamped on resize.
+const TREE_DOCK_MIN = 120
+// Desktop: top bar + a minimal usable board slot + paddings/gaps.
+const MIN_STAGE_RESERVE_DESKTOP = 300
+// Below the 1024px breakpoint the controls stack UNDER the board and keep a
+// scrollable floor of their own, so the stage reserve grows accordingly.
+const MIN_STAGE_RESERVE_STACKED = 440
+
+function minTreeDockHeight(): number {
+  // Very short viewports (e.g. landscape phones) may lower the floor so the
+  // dock can stay open without starving the board entirely.
+  return Math.min(TREE_DOCK_MIN, Math.round(window.innerHeight * 0.25))
+}
+
+function stageReserve(): number {
+  return window.innerWidth < 1024
+    ? MIN_STAGE_RESERVE_STACKED
+    : MIN_STAGE_RESERVE_DESKTOP
+}
+
+function maxTreeDockHeight(): number {
+  return Math.max(minTreeDockHeight(), window.innerHeight - stageReserve())
+}
+
+function clampTreeDockHeight(height: number): number {
+  return Math.round(Math.min(Math.max(height, minTreeDockHeight()), maxTreeDockHeight()))
+}
+
 export function App() {
   // --- Game state -----------------------------------------------------------
   // Boot restores the active-game recovery draft synchronously (sleep/tab
@@ -97,6 +142,34 @@ export function App() {
   const [newGameOpen, setNewGameOpen] = useState(false)
   const [screenshotImportOpen, setScreenshotImportOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
+
+  // --- Game-tree dock (one-screen layout) ------------------------------------
+  // Hidden by default; toggled from the ReviewPanel. While visible it docks
+  // at the bottom of the shell and the stage shrinks by its height, so the
+  // tree fits the same viewport. The height is user-resizable (drag or
+  // keyboard on .tree-resizer) and re-clamped when the viewport resizes.
+  const [treeVisible, setTreeVisible] = useState(false)
+  const [treeDockHeight, setTreeDockHeight] = useState(() =>
+    clampTreeDockHeight(Math.round(window.innerHeight * 0.35)),
+  )
+  const [treeDockDragging, setTreeDockDragging] = useState(false)
+  const treeDragRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
+
+  // Rotation / window resize: keep the dock inside the (possibly smaller)
+  // dynamic viewport so it never overflows the one-screen shell. The resize
+  // listener runs only while visible, so re-opening after the window shrank
+  // while hidden re-clamps the stored height once on becoming visible.
+  useEffect(() => {
+    if (!treeVisible) return
+    setTreeDockHeight((h) => clampTreeDockHeight(h))
+    const onViewportResize = () => setTreeDockHeight((h) => clampTreeDockHeight(h))
+    window.addEventListener('resize', onViewportResize)
+    return () => window.removeEventListener('resize', onViewportResize)
+  }, [treeVisible])
 
   // --- AI game mode ---------------------------------------------------------
   const [gameMode, setGameMode] = useState<GameMode>(boot?.gameMode ?? 'selfplay')
@@ -232,21 +305,10 @@ export function App() {
     setMoveNumberAnchorId(null)
   }, [])
 
-  // Re-initialize game state whenever the size changes (SGF load path).
-  // Skip the initial run: boot may have restored a draft, and a blank reset
-  // here would erase the restored game.
-  const bootSizedRef = useRef(false)
-  useEffect(() => {
-    if (!bootSizedRef.current) {
-      bootSizedRef.current = true
-      return
-    }
-    const newGameState = createGameState(boardSize)
-    setGameState(newGameState)
-    setSignMap(newGameState.getSignMap())
-    // Stale numbering anchor must not leak into a freshly (re)initialized tree.
-    resetMoveNumbering()
-  }, [boardSize, resetMoveNumbering])
+  // NOTE: a boardSize change never re-initializes the game by itself — every
+  // setBoardSize caller (SGF load, screenshot import, new game) already
+  // replaces gameState with a matching tree. A blank reset here would wipe
+  // non-19x19 SGF loads (SZ[9]/SZ[13]) right after they were set.
 
   // --- Active-game autosave ---------------------------------------------------
   // Persist the draft after every tree change (move/pass/undo/redo/navigate)
@@ -796,6 +858,52 @@ export function App() {
     void triggerAiMove()
   }
 
+  // --- Tree dock resizer (pointer/touch/keyboard) ------------------------------
+
+  const handleResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    treeDragRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startHeight: treeDockHeight,
+    }
+    setTreeDockDragging(true)
+    // Capture the pointer so drags keep tracking outside the 14px handle
+    // (also covers touch, with touch-action: none in CSS).
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handleResizerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = treeDragRef.current
+    if (drag === null || drag.pointerId !== e.pointerId) return
+    // Dragging UP grows the tree; the stage above shrinks by the same
+    // amount (flex layout), clamped so a useful board always remains.
+    const delta = drag.startY - e.clientY
+    setTreeDockHeight(clampTreeDockHeight(drag.startHeight + delta))
+  }
+
+  const endTreeDockDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = treeDragRef.current
+    if (drag === null || drag.pointerId !== e.pointerId) return
+    treeDragRef.current = null
+    setTreeDockDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+
+  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 48 : 24
+    let next: number | null = null
+    if (e.key === 'ArrowUp') next = treeDockHeight + step
+    else if (e.key === 'ArrowDown') next = treeDockHeight - step
+    else if (e.key === 'Home') next = Number.POSITIVE_INFINITY
+    else if (e.key === 'End') next = Number.NEGATIVE_INFINITY
+    else return
+    e.preventDefault()
+    setTreeDockHeight(clampTreeDockHeight(next))
+  }
+
   // --- Render --------------------------------------------------------------------
 
   return (
@@ -804,30 +912,34 @@ export function App() {
         id="app-root"
         className={zenMode ? 'zen-mode' : undefined}
       >
-        {!zenMode && (
-          <TopBar
-            gameMode={gameMode}
-            onGameModeChange={handleGameModeChange}
-            soundEnabled={soundEnabled}
-            onToggleSound={handleToggleSound}
-            onToggleZen={() => setZenMode(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
-        )}
+        {/* Fixed-height (desktop) board-first stage: top bar + 3 columns.
+            When the tree dock is open the stage flex-shrinks by the dock
+            height so both fit the same viewport. */}
+        <div className="stage">
+          {!zenMode && (
+            <TopBar
+              gameMode={gameMode}
+              onGameModeChange={handleGameModeChange}
+              soundEnabled={soundEnabled}
+              onToggleSound={handleToggleSound}
+              onToggleZen={() => setZenMode(true)}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          )}
 
-        {zenMode && (
-          <button
-            type="button"
-            id="zen-exit"
-            onClick={() => setZenMode(false)}
-            aria-label="집중 모드 끄기"
-            title="집중 모드 끄기"
-          >
-            ✕
-          </button>
-        )}
+          {zenMode && (
+            <button
+              type="button"
+              id="zen-exit"
+              onClick={() => setZenMode(false)}
+              aria-label="집중 모드 끄기"
+              title="집중 모드 끄기"
+            >
+              ✕
+            </button>
+          )}
 
-        <div className="game-layout">
+          <div className="game-layout">
           {!zenMode && <aside className="board-rail" aria-hidden="true" />}
           <div className="board-col">
             <Board
@@ -860,19 +972,19 @@ export function App() {
                 onNext={() => navigate(() => gameState.redo())}
                 onLast={() => navigate(() => gameState.jumpToEnd())}
               />
-              <ReviewPanel
-                gameState={gameState}
-                moveVersion={moveVersion}
-                gameMode={gameMode}
-                engineEnabled={engineSettings.enabled}
-                treeAnalysis={treeAnalysis}
-                winratePoints={winratePoints}
-                moveNumberMode={moveNumberMode}
-                moveNumberLabelsVisible={moveNumberMap != null}
-                onMoveNumberModeSelect={handleMoveNumberMode}
-                onTreeNodeClick={handleNavigateToNode}
-                onGraphNodeClick={handleNavigateToNode}
-              />
+               <ReviewPanel
+                 gameState={gameState}
+                 gameMode={gameMode}
+                 engineEnabled={engineSettings.enabled}
+                 treeAnalysis={treeAnalysis}
+                 winratePoints={winratePoints}
+                 moveNumberMode={moveNumberMode}
+                 moveNumberLabelsVisible={moveNumberMap != null}
+                 onMoveNumberModeSelect={handleMoveNumberMode}
+                 onGraphNodeClick={handleNavigateToNode}
+                 treeVisible={treeVisible}
+                 onToggleTree={() => setTreeVisible((v) => !v)}
+               />
               <GameSidebar
                 gameState={gameState}
                 moveVersion={moveVersion}
@@ -910,11 +1022,51 @@ export function App() {
                 analysisSettings={analysisSettings}
                 analysisMetadata={analysisMetadata}
                 candidates={candidates}
-                onSelectCandidate={handleSelectCandidate}
-                />
-              </div>
-            )}
+                 onSelectCandidate={handleSelectCandidate}
+                 />
+               </div>
+             )}
+          </div>
         </div>
+
+        {/* Game-tree dock at the bottom: hidden until toggled on from the
+            ReviewPanel. Its fixed pixel height shrinks the stage above by
+            the same amount; the resizer on top is pointer/touch/keyboard
+            resizable; the tree scrolls internally on both axes. Zen mode
+            hides the dock entirely (board-first). */}
+        {!zenMode && treeVisible && (
+          <section
+            className="tree-dock"
+            data-testid="tree-dock"
+            aria-label="기보 트리"
+            style={{ height: `${treeDockHeight}px` }}
+          >
+            <div
+              className="tree-resizer"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="기보 트리 높이 조절"
+              aria-valuemin={minTreeDockHeight()}
+              aria-valuemax={maxTreeDockHeight()}
+              aria-valuenow={treeDockHeight}
+              tabIndex={0}
+              data-dragging={treeDockDragging ? 'true' : undefined}
+              onPointerDown={handleResizerPointerDown}
+              onPointerMove={handleResizerPointerMove}
+              onPointerUp={endTreeDockDrag}
+              onPointerCancel={endTreeDockDrag}
+              onKeyDown={handleResizerKeyDown}
+            />
+            <div className="tree-section">
+              <GameTreePanel
+                tree={gameState.gameTree}
+                moveVersion={moveVersion}
+                onNodeClick={handleNavigateToNode}
+                fill
+              />
+            </div>
+          </section>
+        )}
 
         <SettingsModal
           open={settingsOpen}
