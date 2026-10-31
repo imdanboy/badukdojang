@@ -42,6 +42,8 @@ describe('gameState', () => {
     expect(gs.getSignMap()[0]![0]).toBe(0)
     expect(gs.getSignMap()[1]![0]).toBe(1)
     expect(gs.getSignMap()[0]![1]).toBe(1)
+    expect(gs.board.getCaptures(1)).toBe(1)
+    expect(gs.board.getCaptures(-1)).toBe(0)
   })
 
   test('ko prevents immediate recapture', () => {
@@ -172,15 +174,42 @@ describe('gameState', () => {
     gs.makeMove([0, 1])
 
     expect(gs.getSignMap()[0]![0]).toBe(0)
+    expect(gs.board.getCaptures(1)).toBe(1)
 
     gs.undo()
     expect(gs.getSignMap()[0]![0]).toBe(-1)
     expect(gs.getSignMap()[0]![1]).toBe(1)
+    expect(gs.board.getCaptures(1)).toBe(0)
 
     gs.redo()
     expect(gs.getSignMap()[0]![0]).toBe(0)
     expect(gs.getSignMap()[0]![1]).toBe(1)
     expect(gs.getSignMap()[1]![0]).toBe(1)
+    expect(gs.board.getCaptures(1)).toBe(1)
+  })
+
+  test('capture totals follow the selected branch and restored game tree', () => {
+    const gs = createGameState(9)
+    gs.makeMove([1, 0])
+    const branchStart = String(gs.gameTree.currentId!)
+    gs.makeMove([0, 0])
+    gs.makeMove([0, 1])
+    const captureNode = String(gs.gameTree.currentId!)
+
+    expect(gs.board.getCaptures(1)).toBe(1)
+    expect(gs.undo()).toBe(true)
+    expect(gs.board.getCaptures(1)).toBe(0)
+    expect(gs.redo()).toBe(true)
+    expect(gs.board.getCaptures(1)).toBe(1)
+
+    expect(gs.navigateToNode(branchStart)).toBe(true)
+    expect(gs.board.getCaptures(1)).toBe(0)
+    expect(gs.navigateToNode(captureNode)).toBe(true)
+    expect(gs.board.getCaptures(1)).toBe(1)
+
+    const restored = createGameState(9, gs.gameTree)
+    expect(restored.board.getCaptures(1)).toBe(1)
+    expect(restored.board.getCaptures(-1)).toBe(0)
   })
 
   test('navigateToNode jumps to an arbitrary branch and stays consistent', () => {

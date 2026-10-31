@@ -333,7 +333,7 @@ export function getSetupStones(tree: GameTree): SetupStone[] {
   return stones
 }
 
-export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
+export function getCurrentBoard(tree: GameTree, size: number): GoBoard {
   const currentId = tree.currentId ?? tree.root.id
   let board = GoBoard.fromDimensions(size, size)
 
@@ -346,12 +346,15 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
     // 스크린샷 인식 등 임의 국면이 setup 으로 들어온다. 부분 재생 중 캡처는
     // 일어나지 않는다: 최종 국면의 부분집합 재생에서는 어떤 그룹의 활기도
     // 최종 국면 기준 하한 이하로 내려가지 않기 때문.
+    const blackCaptures = board.getCaptures(1)
+    const whiteCaptures = board.getCaptures(-1)
     for (const coord of data.AB ?? []) {
       board = applySetup(board, 1, coord, size)
     }
     for (const coord of data.AW ?? []) {
       board = applySetup(board, -1, coord, size)
     }
+    board.setCaptures(1, blackCaptures).setCaptures(-1, whiteCaptures)
 
     if (node.id === tree.root.id) continue
 
@@ -388,7 +391,11 @@ export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
     }
   }
 
-  return board.signMap
+  return board
+}
+
+export function getCurrentSignMap(tree: GameTree, size: number): SignMap {
+  return getCurrentBoard(tree, size).signMap
 }
 
 export function getMoveList(

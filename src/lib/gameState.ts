@@ -4,7 +4,7 @@ import {
   appendMove as appendMoveToTree,
   appendPass as appendPassToTree,
   createGameTree,
-  getCurrentSignMap,
+  getCurrentBoard,
   getMoveList,
   navigateToNode as navigateTreeToNode,
   redo as redoTree,
@@ -43,8 +43,7 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
   let lastMove: Vertex | null = null
 
   function syncFromTree(): void {
-    const signMap = getCurrentSignMap(gameTree, size)
-    board = new GoBoard(signMap)
+    board = getCurrentBoard(gameTree, size)
   }
 
   function deriveLastMove(): Vertex | null {
