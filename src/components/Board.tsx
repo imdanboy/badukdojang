@@ -11,7 +11,7 @@
  * rendered as an SVG layer aligned to the Goban's measured content area.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { Goban } from '@kaya/shudan'
 import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
 import { useBoardTheme } from '@kaya/themes'
@@ -42,8 +42,8 @@ export interface BoardProps {
   dimmedVertices?: Vertex[] | undefined
   /** When true, suppress the faint hover ghost stone (e.g., opponent's turn). */
   hoverGhostDisabled?: boolean
-  /** Optional board-aligned analysis display, positioned in the left board rail. */
-  winrateOverlay?: ReactNode
+  /** Actual Goban bounds relative to the Board root, for adjacent overlays. */
+  onBoardWrapBoundsChange?: ((bounds: BoardWrapBounds) => void) | undefined
 }
 
 export interface CandidateMoveMarker {
@@ -52,8 +52,13 @@ export interface CandidateMoveMarker {
   readonly visits: number
 }
 
-const WINRATE_OVERLAY_MAX_WIDTH = 36
-const WINRATE_OVERLAY_MAX_GAP = 14
+export interface BoardWrapBounds {
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+  readonly gridLeft: number
+}
 
 /** Rect of the Goban's board-content area in wrapper coordinates. */
 interface ContentRect {
@@ -85,7 +90,7 @@ export function Board({
   candidateMoves = undefined,
   dimmedVertices = undefined,
   hoverGhostDisabled = false,
-  winrateOverlay = undefined,
+  onBoardWrapBoundsChange,
 }: BoardProps) {
   const { boardTheme, currentTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -97,7 +102,6 @@ export function Board({
   const [contentRect, setContentRect] = useState<ContentRect | null>(null)
   const [flashError, setFlashError] = useState(false)
   const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
-  const hasWinrateOverlay = winrateOverlay !== undefined && winrateOverlay !== null
 
   useEffect(() => {
     const el = containerRef.current
@@ -122,24 +126,40 @@ export function Board({
     if (
       !showOwnership &&
       !showPolicy &&
-      (candidateMoves?.length ?? 0) === 0
+      (candidateMoves?.length ?? 0) === 0 &&
+      onBoardWrapBoundsChange === undefined
     ) {
       setContentRect(null)
       return
     }
     const wrapEl = wrapRef.current
+    const containerEl = containerRef.current
     const contentEl = wrapEl?.querySelector('.shudan-content')
-    if (wrapEl === null || wrapEl === undefined || contentEl === null || contentEl === undefined) {
+    if (
+      wrapEl === null ||
+      wrapEl === undefined ||
+      containerEl === null ||
+      contentEl === null ||
+      contentEl === undefined
+    ) {
       return
     }
 
     const update = () => {
       const wrapRect = wrapEl.getBoundingClientRect()
+      const containerRect = containerEl.getBoundingClientRect()
       const rect = contentEl.getBoundingClientRect()
       setContentRect({
         left: rect.left - wrapRect.left,
         top: rect.top - wrapRect.top,
         size: rect.width,
+      })
+      onBoardWrapBoundsChange?.({
+        left: wrapRect.left - containerRect.left,
+        top: wrapRect.top - containerRect.top,
+        width: wrapRect.width,
+        height: wrapRect.height,
+        gridLeft: rect.left - containerRect.left,
       })
     }
     update()
@@ -151,6 +171,7 @@ export function Board({
     showOwnership,
     showPolicy,
     candidateMoves?.length,
+    onBoardWrapBoundsChange,
     containerSize.width,
     containerSize.height,
     boardSize,
@@ -215,8 +236,6 @@ export function Board({
   // content-sized (mobile) re-measurements deterministic (see above).
   const chromeWidth = Math.round(divisorW * vertexSize)
   const chromeHeight = Math.ceil(divisorH * vertexSize)
-  const winrateOverlayWidth = Math.min(WINRATE_OVERLAY_MAX_WIDTH, vertexSize * 1.25)
-  const winrateOverlayGap = Math.min(WINRATE_OVERLAY_MAX_GAP, vertexSize * 0.25)
 
   // Ghost preview: no marker passed → Goban renders a faint ghost stone
   // (currentPlayer color, ~0.35 opacity) on the hovered empty vertex,
@@ -348,21 +367,6 @@ export function Board({
           {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
           {...(heatMap !== undefined ? { heatMap } : {})}
         />
-        {hasWinrateOverlay && (
-          <div
-            className="board-winrate-overlay"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: -winrateOverlayWidth - winrateOverlayGap,
-              width: winrateOverlayWidth,
-              height: '100%',
-              fontSize: `${Math.min(11, Math.max(6, winrateOverlayWidth * 0.32))}px`,
-            }}
-          >
-            {winrateOverlay}
-          </div>
-        )}
         {(ownershipMarksList !== null || policyMarksList !== null || candidateMoves !== undefined) && contentRect !== null && (
           <svg
             className="ownership-overlay"

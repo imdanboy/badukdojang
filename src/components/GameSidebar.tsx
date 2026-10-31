@@ -1,12 +1,11 @@
 /*
  * GameSidebar — core game controls beside the board (OGS right-col style).
- * Player card (turn + captures), action buttons, SGF I/O, and the
- * analysis section (winrate bar + candidate moves). Only what the
+ * Player card (turn + captures), gameplay actions, and analysis results.
+ * Game/session setup and SGF actions live in the left rail. Only what the
  * active game needs; all configuration lives in SettingsModal.
  */
-import { useMemo, useRef } from 'react'
-import type { RefObject } from 'react'
-import { AnalysisPanel } from './AnalysisPanel.tsx'
+import { useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { AnalysisSummary } from './AnalysisSummary.tsx'
 import { AiAnalysisPanel } from './AiAnalysisPanel.tsx'
 import type { AiMoveStats } from './AiAnalysisPanel.tsx'
@@ -21,6 +20,8 @@ import type { Vertex } from '@kaya/goboard'
 
 export interface GameSidebarProps {
   gameState: GameState
+  playbackBar: ReactNode
+  reviewPanel: ReactNode
   /** Bumped by the parent on every move/navigation to refresh derived state. */
   moveVersion: number
   gameMode: GameMode
@@ -29,30 +30,17 @@ export interface GameSidebarProps {
   onPass: () => void
   onUndo: () => void
   onRedo: () => void
-  onNewGameRequest: () => void
   canScore: boolean
   isScoring: boolean
   onScore: () => void
-  onSaveSGF: () => void
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onOpenScreenshot: () => void
-  showWinrate: boolean
-  onToggleWinrate: () => void
-  showPolicy: boolean
-  onTogglePolicy: () => void
-  showOwnership: boolean
-  onToggleOwnership: () => void
   showCandidates: boolean
-  onToggleCandidates: () => void
   showSummary: boolean
-  onToggleSummary: () => void
   showAiAnalysis: boolean
   onToggleAiAnalysis: () => void
   aiMoveStats: AiMoveStats | null
   analysis: AnalyzeResponse | null
   analysisLoading: boolean
   analysisError: string | null
-  engineEnabled: boolean
   analysisDurationMs: number | null
   analysisSettings: AnalysisSettings
   /** Provenance of an SGF-embedded analysis run (KAM), if loaded. */
@@ -93,16 +81,8 @@ const smallBtnStyle = (active: boolean, disabled: boolean): React.CSSProperties 
   color: '#e0e0e0',
 })
 
-const linkBtnStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '12px',
-  background: 'transparent',
-  color: '#8a8ab0',
-  textDecoration: 'underline',
-}
+const YINYANG_BLACK_PATH =
+  'M32 2A30 30 0 0 1 32 62A15 15 0 0 1 32 32A15 15 0 0 0 32 2Z'
 
 function PlayerCard({
   gameState,
@@ -120,45 +100,84 @@ function PlayerCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, moveVersion])
 
+  const blackCountSize = blackCaptures >= 100 ? 7 : blackCaptures >= 10 ? 9 : 11
+  const whiteCountSize = whiteCaptures >= 100 ? 7 : whiteCaptures >= 10 ? 9 : 11
+
   return (
     <div
       className="player-card"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '12px 16px',
-        background: '#1a1a2e',
-        borderRadius: '8px',
-        color: '#e0e0e0',
-        fontSize: '14px',
-      }}
     >
-      <span
-        style={{
-          display: 'inline-block',
-          width: '18px',
-          height: '18px',
-          borderRadius: '50%',
-          background: isBlackTurn ? '#1a1a1a' : '#f0f0f0',
-          border: '1px solid #555',
-          flexShrink: 0,
-        }}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <span id="turn-indicator">
-          To Play: {isBlackTurn ? 'Black' : 'White'}
-        </span>
-        <span style={{ fontSize: '12px', opacity: 0.6 }}>
-          잡은 돌 — 흑 {blackCaptures} · 백 {whiteCaptures}
-        </span>
-      </div>
+      <svg
+        className="player-turn-yinyang"
+        viewBox="0 0 64 64"
+        data-current-player={isBlackTurn ? 'black' : 'white'}
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle
+          className="player-turn-yinyang-base"
+          cx="32"
+          cy="32"
+          r="30"
+          opacity={isBlackTurn ? 0.38 : 1}
+        />
+        <path
+          className="player-turn-yinyang-black"
+          d={YINYANG_BLACK_PATH}
+          transform="translate(0 64) scale(1 -1)"
+          opacity={isBlackTurn ? 1 : 0.35}
+        />
+        <circle className="player-turn-yinyang-outline" cx="32" cy="32" r="30" />
+        <path
+          className="player-turn-active-lobe"
+          d={YINYANG_BLACK_PATH}
+          transform={
+            isBlackTurn
+              ? 'translate(0 64) scale(1 -1)'
+              : 'translate(64 0) scale(-1 1)'
+          }
+          data-active-lobe={isBlackTurn ? 'black' : 'white'}
+        />
+        <circle
+          className="player-turn-count-dot player-turn-count-dot-white"
+          cx="32"
+          cy="17"
+          r="10"
+        />
+        <text
+          className="player-turn-count player-turn-count-white"
+          x="32"
+          y="17"
+          fontSize={whiteCountSize}
+        >
+          {whiteCaptures}
+        </text>
+        <circle
+          className="player-turn-count-dot player-turn-count-dot-black"
+          cx="32"
+          cy="47"
+          r="10"
+        />
+        <text
+          className="player-turn-count player-turn-count-black"
+          x="32"
+          y="47"
+          fontSize={blackCountSize}
+        >
+          {blackCaptures}
+        </text>
+      </svg>
+      <span id="turn-indicator" className="visually-hidden" aria-live="polite" aria-atomic="true">
+        To Play: {isBlackTurn ? 'Black' : 'White'}. 흑 잡은 돌 {blackCaptures}개. 백 잡은 돌 {whiteCaptures}개.
+      </span>
     </div>
   )
 }
 
 export function GameSidebar({
   gameState,
+  playbackBar,
+  reviewPanel,
   moveVersion,
   gameMode,
   isAiThinking,
@@ -166,23 +185,11 @@ export function GameSidebar({
   onPass,
   onUndo,
   onRedo,
-  onNewGameRequest,
   canScore,
   isScoring,
   onScore,
-  onSaveSGF,
-  onFileChange,
-  onOpenScreenshot,
-  showWinrate,
-  onToggleWinrate,
-  showPolicy,
-  onTogglePolicy,
-  showOwnership,
-  onToggleOwnership,
   showCandidates,
-  onToggleCandidates,
   showSummary,
-  onToggleSummary,
   showAiAnalysis,
   onToggleAiAnalysis,
   aiMoveStats,
@@ -192,12 +199,9 @@ export function GameSidebar({
   analysisDurationMs,
   analysisSettings,
   analysisMetadata,
-  engineEnabled,
   candidates,
   onSelectCandidate,
 }: GameSidebarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const { isAtRoot, isAtLeaf } = useMemo(() => {
     const tree = gameState.gameTree
     const currentId = tree.currentId ?? tree.root.id
@@ -209,10 +213,6 @@ export function GameSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, moveVersion])
 
-  const handleLoadClick = () => {
-    fileInputRef.current?.click()
-  }
-
   return (
     <div
       className="game-sidebar"
@@ -223,176 +223,79 @@ export function GameSidebar({
         minWidth: 0,
       }}
     >
-      <PlayerCard gameState={gameState} moveVersion={moveVersion} />
+      <section className="sidebar-group game-progress-section" aria-label="대국 진행">
+        <h2 className="sidebar-group-title">대국 진행</h2>
+        {playbackBar}
+        <PlayerCard gameState={gameState} moveVersion={moveVersion} />
 
-      {gameMode === 'ai' && (
-        <button
-          id="ai-move-btn"
-          style={primaryBtnStyle(isAiThinking)}
-          disabled={isAiThinking}
-          onClick={onAiMove}
-        >
-          {isAiThinking ? 'AI 생각중...' : 'AI Move'}
-        </button>
-      )}
+        {gameMode === 'ai' && (
+          <button
+            id="ai-move-btn"
+            style={primaryBtnStyle(isAiThinking)}
+            disabled={isAiThinking}
+            onClick={onAiMove}
+          >
+            {isAiThinking ? 'AI 생각중...' : 'AI Move'}
+          </button>
+        )}
 
-      {/* Core game actions */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          padding: '12px 16px',
-          background: '#1a1a2e',
-          borderRadius: '8px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={btnStyle(false)} onClick={onPass}>
-            Pass
-          </button>
-          <button
-            id="score-btn"
-            style={btnStyle(!canScore || isScoring)}
-            disabled={!canScore || isScoring}
-            onClick={onScore}
-          >
-            {isScoring ? '계가 중...' : '계가'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            style={btnStyle(isAtRoot)}
-            disabled={isAtRoot}
-            onClick={onUndo}
-          >
-            Undo
-          </button>
-          <button
-            style={btnStyle(isAtLeaf)}
-            disabled={isAtLeaf}
-            onClick={onRedo}
-          >
-            Redo
-          </button>
-        </div>
-        <button style={primaryBtnStyle(false)} onClick={onNewGameRequest}>
-          New Game
-        </button>
-      </div>
-
-      {/* SGF I/O — quiet, non-core */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'center',
-          padding: '6px 10px',
-          background: '#1a1a2e',
-          borderRadius: '8px',
-        }}
-      >
-        <button style={linkBtnStyle} onClick={onSaveSGF}>
-          Save SGF
-        </button>
-        <span style={{ opacity: 0.3 }}>|</span>
-        <button style={linkBtnStyle} onClick={handleLoadClick}>
-          Load SGF
-        </button>
-        <span style={{ opacity: 0.3 }}>|</span>
-        <button style={linkBtnStyle} onClick={onOpenScreenshot}>
-          스크린샷
-        </button>
-        <input
-          ref={fileInputRef as RefObject<HTMLInputElement>}
-          type="file"
-          accept=".sgf,text/plain"
-          onChange={onFileChange}
-          style={{ display: 'none' }}
-        />
-      </div>
-
-      {/* Analysis section — three independent display layers fed by ONE
-          shared analysis response. Any toggle being on starts the engine
-          fetch; turning all off stops it. Filtering happens client-side. */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button
-            id="winrate-toggle"
-            onClick={onToggleWinrate}
-            disabled={!engineEnabled}
-            title={
-              engineEnabled
-                ? showWinrate
-                  ? '승률 표시 끔'
-                  : '승률 표시: 현재 국면 엔진 분석 시작'
-                : '엔진이 꺼져 있습니다'
-            }
-            style={smallBtnStyle(showWinrate, !engineEnabled)}
-          >
-            승률
-          </button>
-          <button
-            id="policy-toggle"
-            onClick={onTogglePolicy}
-            disabled={!engineEnabled}
-            title={
-              engineEnabled
-                ? showPolicy
-                  ? '정책망 확률 표시 끔'
-                  : '정책망 확률 표시: 현재 국면 엔진 분석 시작'
-                : '엔진이 꺼져 있습니다'
-            }
-            style={smallBtnStyle(showPolicy, !engineEnabled)}
-          >
-            정책망
-          </button>
-          {gameMode === 'selfplay' && (
-            <button
-              id="candidates-toggle"
-              onClick={onToggleCandidates}
-              disabled={!engineEnabled}
-              title={
-                engineEnabled
-                  ? showCandidates
-                    ? '후보 수 표시 끔'
-                    : '후보 수 표시: 현재 국면 엔진 분석 시작'
-                  : '엔진이 꺼져 있습니다'
-              }
-              style={smallBtnStyle(showCandidates, !engineEnabled)}
-            >
-              후보수
+        <div className="sidebar-game-actions">
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button style={btnStyle(false)} onClick={onPass}>
+              Pass
             </button>
+            <button
+              id="score-btn"
+              style={btnStyle(!canScore || isScoring)}
+              disabled={!canScore || isScoring}
+              onClick={onScore}
+            >
+              {isScoring ? '계가 중...' : '계가'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              style={btnStyle(isAtRoot)}
+              disabled={isAtRoot}
+              onClick={onUndo}
+            >
+              Undo
+            </button>
+            <button
+              style={btnStyle(isAtLeaf)}
+              disabled={isAtLeaf}
+              onClick={onRedo}
+            >
+              Redo
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {reviewPanel}
+
+      {(gameMode === 'selfplay' && showCandidates && candidates.length > 0) ||
+      showSummary ||
+      gameMode === 'ai' ? (
+        <section className="sidebar-group analysis-results-section" aria-label="분석 결과">
+          <h2 className="sidebar-group-title">분석 결과</h2>
+          {gameMode === 'selfplay' && showCandidates && (
+            <CandidateMoves
+              candidates={candidates}
+              onSelectMove={onSelectCandidate}
+              disabled={isAiThinking}
+            />
           )}
-          <button
-            id="analysis-summary-toggle"
-            onClick={onToggleSummary}
-            title={showSummary ? '분석 요약 표시 끔' : '분석 요약 표시'}
-            style={smallBtnStyle(showSummary, false)}
-          >
-            분석 요약
-          </button>
-          <button
-            id="ownership-toggle"
-            onClick={onToggleOwnership}
-            disabled={!engineEnabled}
-            title={
-              engineEnabled
-                ? showOwnership
-                  ? '형세 표시 끔'
-                  : '형세 표시: 현재 국면 엔진 분석 시작'
-                : '엔진이 꺼져 있습니다'
-            }
-            style={smallBtnStyle(showOwnership, !engineEnabled)}
-          >
-            형세
-          </button>
+          {showSummary && (
+            <AnalysisSummary
+              analysis={analysis}
+              loading={analysisLoading}
+              error={analysisError}
+              durationMs={analysisDurationMs}
+              settings={analysisSettings}
+              metadata={analysisMetadata}
+            />
+          )}
           {gameMode === 'ai' && (
             <button
               id="ai-analysis-toggle"
@@ -403,38 +306,11 @@ export function GameSidebar({
               AI 분석
             </button>
           )}
-        </div>
-        {showWinrate && (
-          <AnalysisPanel
-            analysis={analysis}
-            loading={analysisLoading}
-            error={analysisError}
-            engineEnabled={engineEnabled}
-          />
-        )}
-        {gameMode === 'selfplay' && showCandidates && (
-          <CandidateMoves
-            candidates={candidates}
-            onSelectMove={onSelectCandidate}
-            disabled={isAiThinking}
-          />
-        )}
-      </div>
-
-      {showSummary && (
-        <AnalysisSummary
-          analysis={analysis}
-          loading={analysisLoading}
-          error={analysisError}
-          durationMs={analysisDurationMs}
-          settings={analysisSettings}
-          metadata={analysisMetadata}
-        />
-      )}
-
-      {gameMode === 'ai' && showAiAnalysis && (
-        <AiAnalysisPanel stats={aiMoveStats} isThinking={isAiThinking} />
-      )}
+          {gameMode === 'ai' && showAiAnalysis && (
+            <AiAnalysisPanel stats={aiMoveStats} isThinking={isAiThinking} />
+          )}
+        </section>
+      ) : null}
     </div>
   )
 }

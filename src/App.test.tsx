@@ -1,6 +1,8 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { useEffect } from 'react'
 import { App } from './App.tsx'
+import './index.css'
 import {
   ACTIVE_GAME_STORAGE_KEY,
   saveActiveGame,
@@ -61,7 +63,24 @@ vi.mock('./components/Board.tsx', () => {
       aiGhostVertex?: [number, number] | null
       aiFlashVertex?: [number, number] | null
       markerMap?: Array<Array<{ type?: string; label?: string } | null>>
+      onBoardWrapBoundsChange?: (bounds: {
+        left: number
+        top: number
+        width: number
+        height: number
+        gridLeft: number
+      }) => void
     }) => {
+      useEffect(() => {
+        props.onBoardWrapBoundsChange?.({
+          left: 20,
+          top: 20,
+          width: 400,
+          height: 400,
+          gridLeft: 60,
+        })
+      }, [props.onBoardWrapBoundsChange])
+
       const size = props.boardSize
       const vertices: React.JSX.Element[] = []
       for (let y = 0; y < size; y++) {
@@ -152,6 +171,17 @@ describe('App', () => {
 
     // Default mode is self-play
     expect(screen.getByText('놓아보기')).toBeTruthy()
+    expect(document.querySelector('.player-turn-yinyang')?.getAttribute('data-current-player')).toBe(
+      'black',
+    )
+    expect(document.querySelector('.player-turn-yinyang-black')?.getAttribute('transform')).toBe(
+      'translate(0 64) scale(1 -1)',
+    )
+    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
+    expect(document.querySelector('.player-turn-count-dot-white')?.getAttribute('cy')).toBe('17')
+    expect(
+      document.querySelector('.player-turn-active-lobe')?.getAttribute('data-active-lobe'),
+    ).toBe('black')
 
     // Place a black stone at (3,3)
     await clickVertex(3, 3, 19)
@@ -159,9 +189,58 @@ describe('App', () => {
     // Turn should flip to White
     const turnIndicator = screen.getByText(/To Play:/)
     expect(turnIndicator.textContent).toContain('White')
+    expect(document.querySelector('.player-turn-yinyang')?.getAttribute('data-current-player')).toBe(
+      'white',
+    )
+    expect(
+      document.querySelector('.player-turn-active-lobe')?.getAttribute('data-active-lobe'),
+    ).toBe('white')
+    expect(document.querySelector('.player-turn-active-lobe')?.getAttribute('transform')).toBe(
+      'translate(64 0) scale(-1 1)',
+    )
+    expect(document.querySelector('.player-turn-count-black')?.textContent).toBe('0')
+    expect(document.querySelector('.player-turn-count-white')?.textContent).toBe('0')
+    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
+    expect(document.querySelector('.player-turn-count-dot-white')?.getAttribute('cy')).toBe('17')
 
     // requestMove should NOT have been called
     expect(requestMoveMock).not.toHaveBeenCalled()
+  })
+
+  test('analysis display toggles are grouped in the top bar, not the sidebar', () => {
+    render(<App />)
+
+    expect(document.querySelector('.top-bar-logo')?.getAttribute('src')).toBe('/favicon.svg')
+    const toolbar = document.querySelector('.top-bar-analysis')
+    expect(toolbar?.getAttribute('aria-label')).toBe('분석 표시')
+    for (const id of [
+      'winrate-toggle',
+      'candidates-toggle',
+      'policy-toggle',
+      'ownership-toggle',
+      'analysis-summary-toggle',
+    ]) {
+      expect(toolbar?.querySelector(`#${id}`)).not.toBeNull()
+      expect(document.querySelector(`.game-sidebar #${id}`)).toBeNull()
+    }
+    expect(toolbar?.querySelectorAll('.analysis-toggle-icon')).toHaveLength(5)
+  })
+
+  test('winrate toggle anchors the vertical bar beside the board', () => {
+    render(<App />)
+    enableEngine()
+    fireEvent.click(document.getElementById('winrate-toggle')!)
+
+    const boardColumn = document.querySelector('.board-col')!
+    expect(boardColumn.classList.contains('board-col-with-winrate')).toBe(true)
+    expect(getComputedStyle(boardColumn).position).toBe('relative')
+    const winrateColumn = document.querySelector('.board-winrate-column')!
+    expect(winrateColumn).not.toBeNull()
+    expect(winrateColumn.querySelector('.winrate-vertical-track')).not.toBeNull()
+    expect(getComputedStyle(winrateColumn.querySelector('.winrate-vertical-track')!).flexDirection).toBe(
+      'column',
+    )
+    expect(document.querySelector('.game-sidebar #winrate-bar')).toBeNull()
   })
 
   test('candidate score changes use the player-to-move perspective', async () => {
@@ -535,14 +614,37 @@ describe('App layout — three columns, playback in the right function column', 
     expect(boardCol.querySelector('#playback-first')).toBeNull()
   })
 
-  test('left rail is a reserved, empty, non-interactive element', () => {
+  test('right sidebar separates game progress from analysis results', () => {
+    render(<App />)
+
+    const sideCol = document.querySelector('.side-col')!
+    const progress = sideCol.querySelector('.game-progress-section')!
+    const review = sideCol.querySelector('.review-panel')!
+    expect(progress.contains(document.getElementById('playback-first'))).toBe(true)
+    expect(progress.contains(document.getElementById('turn-indicator'))).toBe(true)
+    expect(progress.contains(document.getElementById('score-btn'))).toBe(true)
+    expect(progress.contains(review)).toBe(false)
+
+    fireEvent.click(document.getElementById('analysis-summary-toggle')!)
+    const results = sideCol.querySelector('.analysis-results-section')!
+    expect(results).toBeTruthy()
+    expect(sideCol.contains(results)).toBe(true)
+  })
+
+  test('left rail contains game and SGF actions', () => {
     render(<App />)
 
     const rail = document.querySelector('.board-rail') as HTMLElement | null
     expect(rail).toBeTruthy()
-    expect(rail!.getAttribute('aria-hidden')).toBe('true')
-    expect(rail!.childElementCount).toBe(0)
-    expect(rail!.textContent).toBe('')
+    expect(rail!.getAttribute('aria-label')).toBe('대국 및 기보')
+    for (const id of [
+      'new-game-action',
+      'save-sgf-action',
+      'load-sgf-action',
+      'screenshot-import-action',
+    ]) {
+      expect(document.getElementById(id)).not.toBeNull()
+    }
   })
 
   test('game-tree dock is hidden by default; the review toggle shows it with a resizer', () => {
@@ -558,6 +660,7 @@ describe('App layout — three columns, playback in the right function column', 
     fireEvent.click(toggle)
     const dock = document.querySelector('[data-testid="tree-dock"]')!
     expect(dock).toBeTruthy()
+    expect(Number.parseFloat((dock as HTMLElement).style.height)).toBeLessThanOrEqual(100)
     const panel = dock.querySelector('[data-testid="game-tree-panel"]')!
     expect(panel).toBeTruthy()
     expect(document.querySelectorAll('.tree-resizer').length).toBe(1)
@@ -674,7 +777,7 @@ describe('App autosave — active-game recovery draft', () => {
     render(<App />)
     await clickVertex(3, 3, 19)
 
-    fireEvent.click(screen.getByText('New Game'))
+    fireEvent.click(document.getElementById('new-game-action')!)
     fireEvent.click(document.getElementById('new-game-start')!)
 
     // Declined: game and draft unchanged, modal stays open.
@@ -716,7 +819,7 @@ describe('App autosave — active-game recovery draft', () => {
 
     render(<App />)
 
-    fireEvent.click(screen.getByText('New Game'))
+    fireEvent.click(document.getElementById('new-game-action')!)
     fireEvent.click(document.getElementById('new-game-start')!)
 
     expect(confirmMock).not.toHaveBeenCalled()
@@ -1018,7 +1121,7 @@ describe('Review — move-number display modes', () => {
     ).toBe('true')
 
     // New game: numbering must be hidden again — no stale anchor applies.
-    fireEvent.click(screen.getByText('New Game'))
+    fireEvent.click(document.getElementById('new-game-action')!)
     fireEvent.click(document.getElementById('new-game-start')!)
     await waitFor(() => {
       expect(screen.getByText('Move 0')).toBeTruthy()

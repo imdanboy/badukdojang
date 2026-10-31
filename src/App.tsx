@@ -1,8 +1,8 @@
 /*
  * badukdojang — game screen composition.
  *
- * Layout (OGS-inspired): top bar + three columns — a reserved left rail
- * (board-aligned winrate meter), the board as the dominant center column,
+ * Layout (OGS-inspired): top bar + three columns — a left game/session rail,
+ * the board and winrate meter as the dominant center column,
  * and the right column with playback controls + core game controls
  * (GameSidebar). Non-core configuration (engine tuning, board theme)
  * lives in SettingsModal; per-game setup (size, mode, difficulty) in
@@ -27,6 +27,8 @@ import type { SignMap, Vertex } from '@kaya/goboard'
 import type { BoardMap, Marker } from '@kaya/shudan'
 import { BoardThemeProvider } from '@kaya/themes'
 import { Board } from './components/Board.tsx'
+import type { BoardWrapBounds } from './components/Board.tsx'
+import { GameActionsRail } from './components/GameActionsRail.tsx'
 import { AnalysisPanel } from './components/AnalysisPanel.tsx'
 import { TopBar } from './components/TopBar.tsx'
 import { GameSidebar } from './components/GameSidebar.tsx'
@@ -84,7 +86,9 @@ import { EngineError } from './lib/engine/types.ts'
 // share one viewport without page-level scroll. Bounds keep a useful board
 // even on short viewports; window.innerHeight (dynamic viewport height, incl.
 // mobile URL-bar changes) is read at drag time and re-clamped on resize.
-const TREE_DOCK_MIN = 120
+// 14px handle + 6px dock gap + about two 32px tree rows.
+const TREE_DOCK_MIN = 88
+const TREE_DOCK_DEFAULT = 88
 // Desktop: top bar + a minimal usable board slot + paddings/gaps.
 const MIN_STAGE_RESERVE_DESKTOP = 300
 // Below the 1024px breakpoint the controls stack UNDER the board and keep a
@@ -109,6 +113,24 @@ function maxTreeDockHeight(): number {
 
 function clampTreeDockHeight(height: number): number {
   return Math.round(Math.min(Math.max(height, minTreeDockHeight()), maxTreeDockHeight()))
+}
+
+function getWinrateMeterLayout(bounds: BoardWrapBounds) {
+  const gap = 6
+  const outerSpace = Math.max(0, bounds.left - gap)
+  const gridGutterSpace = Math.max(0, bounds.gridLeft - gap)
+  const useCoordinateGutter = window.innerWidth < 1024 && outerSpace < 18
+  const width = Math.min(36, useCoordinateGutter ? gridGutterSpace : 36)
+
+  return {
+    left: useCoordinateGutter
+      ? Math.max(0, bounds.gridLeft - width - gap)
+      : bounds.left - width - gap,
+    top: bounds.top,
+    width,
+    height: bounds.height,
+    fontSize: `${Math.min(11, Math.max(6, width * 0.32))}px`,
+  }
 }
 
 export function App() {
@@ -139,10 +161,23 @@ export function App() {
   const [showPolicy, setShowPolicy] = useState(false)
   const [showAiAnalysis, setShowAiAnalysis] = useState(false)
   const [aiMoveStats, setAiMoveStats] = useState<AiMoveStats | null>(null)
+  const [boardWrapBounds, setBoardWrapBounds] = useState<BoardWrapBounds | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newGameOpen, setNewGameOpen] = useState(false)
   const [screenshotImportOpen, setScreenshotImportOpen] = useState(false)
   const [zenMode, setZenMode] = useState(false)
+
+  const handleBoardWrapBoundsChange = useCallback((bounds: BoardWrapBounds) => {
+    setBoardWrapBounds((previous) =>
+      previous?.left === bounds.left &&
+      previous.top === bounds.top &&
+      previous.width === bounds.width &&
+      previous.height === bounds.height &&
+      previous.gridLeft === bounds.gridLeft
+        ? previous
+        : bounds,
+    )
+  }, [])
 
   // --- Game-tree dock (one-screen layout) ------------------------------------
   // Hidden by default; toggled from the ReviewPanel. While visible it docks
@@ -151,7 +186,7 @@ export function App() {
   // keyboard on .tree-resizer) and re-clamped when the viewport resizes.
   const [treeVisible, setTreeVisible] = useState(false)
   const [treeDockHeight, setTreeDockHeight] = useState(() =>
-    clampTreeDockHeight(Math.round(window.innerHeight * 0.35)),
+    clampTreeDockHeight(TREE_DOCK_DEFAULT),
   )
   const [treeDockDragging, setTreeDockDragging] = useState(false)
   const treeDragRef = useRef<{
@@ -922,6 +957,17 @@ export function App() {
             <TopBar
               gameMode={gameMode}
               onGameModeChange={handleGameModeChange}
+              engineEnabled={engineSettings.enabled}
+              showWinrate={showWinrate}
+              onToggleWinrate={() => setShowWinrate((prev) => !prev)}
+              showCandidates={showCandidates}
+              onToggleCandidates={() => setShowCandidates((prev) => !prev)}
+              showPolicy={showPolicy}
+              onTogglePolicy={() => setShowPolicy((prev) => !prev)}
+              showOwnership={showOwnership}
+              onToggleOwnership={() => setShowOwnership((prev) => !prev)}
+              showSummary={showSummary}
+              onToggleSummary={() => setShowSummary((prev) => !prev)}
               soundEnabled={soundEnabled}
               onToggleSound={handleToggleSound}
               onToggleZen={() => setZenMode(true)}
@@ -942,8 +988,29 @@ export function App() {
           )}
 
           <div className="game-layout">
-          {!zenMode && <aside className="board-rail" aria-hidden="true" />}
-          <div className="board-col">
+          {!zenMode && (
+            <GameActionsRail
+              onNewGame={() => setNewGameOpen(true)}
+              onSaveSgf={handleSaveSGF}
+              onFileChange={handleFileChange}
+              onImportScreenshot={() => setScreenshotImportOpen(true)}
+            />
+          )}
+          <div className={`board-col${showWinrate && !zenMode ? ' board-col-with-winrate' : ''}`}>
+            {showWinrate && !zenMode && boardWrapBounds !== null && (
+              <div
+                className="board-winrate-column"
+                style={getWinrateMeterLayout(boardWrapBounds)}
+              >
+                <AnalysisPanel
+                  analysis={winrateAnalysis}
+                  loading={winrateLoading}
+                  error={winrateError}
+                  engineEnabled={engineSettings.enabled}
+                  orientation="vertical"
+                />
+              </div>
+            )}
             <Board
               signMap={signMap}
               boardSize={boardSize}
@@ -961,84 +1028,67 @@ export function App() {
               candidateMoves={showCandidates ? candidateMarkers : undefined}
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
               hoverGhostDisabled={isAiThinking}
-              winrateOverlay={
-                showWinrate && !zenMode ? (
-                  <AnalysisPanel
-                    analysis={winrateAnalysis}
-                    loading={winrateLoading}
-                    error={winrateError}
-                    engineEnabled={engineSettings.enabled}
-                    orientation="vertical"
-                  />
-                ) : undefined
+              onBoardWrapBoundsChange={
+                showWinrate && !zenMode ? handleBoardWrapBoundsChange : undefined
               }
             />
           </div>
 
           {!zenMode && (
             <div className="side-col">
-              <PlaybackBar
-                gameState={gameState}
-                moveVersion={moveVersion}
-                onFirst={() => navigate(() => gameState.jumpToStart())}
-                onPrev={() => navigate(() => gameState.undo())}
-                onNext={() => navigate(() => gameState.redo())}
-                onLast={() => navigate(() => gameState.jumpToEnd())}
-              />
-               <ReviewPanel
-                 gameState={gameState}
-                 gameMode={gameMode}
-                 engineEnabled={engineSettings.enabled}
-                 treeAnalysis={treeAnalysis}
-                 winratePoints={winratePoints}
-                 moveNumberMode={moveNumberMode}
-                 moveNumberLabelsVisible={moveNumberMap != null}
-                 onMoveNumberModeSelect={handleMoveNumberMode}
-                 onGraphNodeClick={handleNavigateToNode}
-                 treeVisible={treeVisible}
-                 onToggleTree={() => setTreeVisible((v) => !v)}
-               />
               <GameSidebar
                 gameState={gameState}
                 moveVersion={moveVersion}
+                playbackBar={
+                  <PlaybackBar
+                    gameState={gameState}
+                    moveVersion={moveVersion}
+                    onFirst={() => navigate(() => gameState.jumpToStart())}
+                    onPrev={() => navigate(() => gameState.undo())}
+                    onNext={() => navigate(() => gameState.redo())}
+                    onLast={() => navigate(() => gameState.jumpToEnd())}
+                  />
+                }
+                reviewPanel={
+                  <ReviewPanel
+                    gameState={gameState}
+                    gameMode={gameMode}
+                    engineEnabled={engineSettings.enabled}
+                    treeAnalysis={treeAnalysis}
+                    winratePoints={winratePoints}
+                    moveNumberMode={moveNumberMode}
+                    moveNumberLabelsVisible={moveNumberMap != null}
+                    onMoveNumberModeSelect={handleMoveNumberMode}
+                    onGraphNodeClick={handleNavigateToNode}
+                    treeVisible={treeVisible}
+                    onToggleTree={() => setTreeVisible((v) => !v)}
+                  />
+                }
                 gameMode={gameMode}
                 isAiThinking={isAiThinking}
                 onAiMove={handleAiMove}
                 onPass={handlePass}
                 onUndo={handleUndo}
                 onRedo={handleRedo}
-                onNewGameRequest={() => setNewGameOpen(true)}
-                onOpenScreenshot={() => setScreenshotImportOpen(true)}
                 canScore={canScore}
                 isScoring={isScoring}
                 onScore={handleScore}
-                onSaveSGF={handleSaveSGF}
-                onFileChange={handleFileChange}
-                showWinrate={showWinrate}
-                onToggleWinrate={() => setShowWinrate((prev) => !prev)}
-                showPolicy={showPolicy}
-                onTogglePolicy={() => setShowPolicy((prev) => !prev)}
-                showOwnership={showOwnership}
-                onToggleOwnership={() => setShowOwnership((prev) => !prev)}
                 showCandidates={showCandidates}
-                onToggleCandidates={() => setShowCandidates((prev) => !prev)}
                 showSummary={showSummary}
-                onToggleSummary={() => setShowSummary((prev) => !prev)}
                 showAiAnalysis={showAiAnalysis}
                 onToggleAiAnalysis={() => setShowAiAnalysis((prev) => !prev)}
                 aiMoveStats={aiMoveStats}
                 analysis={winrateAnalysis}
                 analysisLoading={winrateLoading}
                 analysisError={winrateError}
-                engineEnabled={engineSettings.enabled}
                 analysisDurationMs={analysisDurationMs}
                 analysisSettings={analysisSettings}
                 analysisMetadata={analysisMetadata}
                 candidates={candidates}
-                 onSelectCandidate={handleSelectCandidate}
-                 />
-               </div>
-             )}
+                onSelectCandidate={handleSelectCandidate}
+              />
+            </div>
+          )}
           </div>
         </div>
 

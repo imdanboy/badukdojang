@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
+import { fireEvent, render, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Board } from './Board.tsx'
 import { BoardThemeProvider } from '@kaya/themes'
@@ -69,7 +69,17 @@ describe('Board candidate hover preview', () => {
     await waitFor(() => expect(document.querySelector('.candidate-hover-stone')).toBeNull())
   })
 
-  test('fills the responsive board wrapper without covering it', () => {
+  test('reports wrapper and grid bounds so the winrate meter can sit beside the board', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.classList.contains('board-container')) return new DOMRect(80, 40, 600, 600)
+      if (this.classList.contains('board-goban-wrap')) return new DOMRect(100, 50, 500, 500)
+      if (this.classList.contains('shudan-content')) return new DOMRect(140, 70, 420, 420)
+      return new DOMRect(0, 0, 600, 600)
+    })
+    const onBoardWrapBoundsChange = vi.fn()
+
     render(
       <BoardThemeProvider>
         <Board
@@ -77,16 +87,17 @@ describe('Board candidate hover preview', () => {
           boardSize={9}
           currentPlayer={1}
           showCoordinates={false}
-          winrateOverlay={<span data-testid="winrate-overlay-content">50/50</span>}
+          onBoardWrapBoundsChange={onBoardWrapBoundsChange}
         />
       </BoardThemeProvider>,
     )
 
-    expect(screen.getByTestId('winrate-overlay-content').textContent).toBe('50/50')
-    const overlay = document.querySelector('.board-winrate-overlay') as HTMLDivElement
-    expect(overlay.parentElement?.className).toBe('board-goban-wrap')
-    expect(overlay.style.top).toBe('0px')
-    expect(overlay.style.left).toBe('-50px')
-    expect(overlay.style.height).toBe('100%')
+    expect(onBoardWrapBoundsChange).toHaveBeenCalledWith({
+      left: 20,
+      top: 10,
+      width: 500,
+      height: 500,
+      gridLeft: 60,
+    })
   })
 })
