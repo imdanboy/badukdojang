@@ -164,6 +164,42 @@ describe('App', () => {
     expect(requestMoveMock).not.toHaveBeenCalled()
   })
 
+  test('candidate score changes use the player-to-move perspective', async () => {
+    requestAnalysisMock.mockResolvedValue({
+      scoreLead: 5,
+      bestMoves: [
+        { move: 'D5', visits: 80, winrate: 0.6, scoreLead: 2 },
+        { move: 'Q16', visits: 20, winrate: 0.4, scoreLead: 8 },
+      ],
+    })
+    render(<App />)
+
+    enableEngine()
+    fireEvent.click(document.getElementById('candidates-toggle')!)
+
+    // White to play: a lower black score is an improvement for White.
+    await clickVertex(3, 3, 19)
+    await waitFor(() => {
+      const rows = document.querySelectorAll('.candidate-move-row')
+      expect(rows).toHaveLength(2)
+      expect(rows[0]!.textContent).toContain('+3.0')
+      expect(rows[1]!.textContent).toContain('-3.0')
+      expect(rows[0]!.textContent).toContain('40.0%')
+      expect(rows[1]!.textContent).toContain('60.0%')
+    })
+
+    // Black to play: the same absolute candidate scores have opposite deltas.
+    await clickVertex(4, 4, 19)
+    await waitFor(() => {
+      const rows = document.querySelectorAll('.candidate-move-row')
+      expect(rows).toHaveLength(2)
+      expect(rows[0]!.textContent).toContain('-3.0')
+      expect(rows[1]!.textContent).toContain('+3.0')
+      expect(rows[0]!.textContent).toContain('60.0%')
+      expect(rows[1]!.textContent).toContain('40.0%')
+    })
+  })
+
   test('AI mode: human move triggers engine response', async () => {
     render(<App />)
 

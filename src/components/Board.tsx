@@ -11,7 +11,7 @@
  * rendered as an SVG layer aligned to the Goban's measured content area.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Goban } from '@kaya/shudan'
 import type { BoardMap, HeatVertex, Marker, SignMap, Vertex } from '@kaya/shudan'
 import { useBoardTheme } from '@kaya/themes'
@@ -36,19 +36,24 @@ export interface BoardProps {
   policy?: readonly number[] | null
   /** Toggle the policy probability overlay on/off. */
   showPolicy?: boolean
-  /** Top-N candidate moves to render as score-lead/visit markers. */
+  /** Top-N candidate moves to render as score-change/visit markers. */
   candidateMoves?: CandidateMoveMarker[] | undefined
   /** Vertices to dim (e.g., dead stones in scoring mode). */
   dimmedVertices?: Vertex[] | undefined
   /** When true, suppress the faint hover ghost stone (e.g., opponent's turn). */
   hoverGhostDisabled?: boolean
+  /** Optional board-aligned analysis display, positioned in the left board rail. */
+  winrateOverlay?: ReactNode
 }
 
 export interface CandidateMoveMarker {
   readonly vertex: Vertex
-  readonly scoreLead: number
+  readonly scoreDelta: number
   readonly visits: number
 }
+
+const WINRATE_OVERLAY_MAX_WIDTH = 36
+const WINRATE_OVERLAY_MAX_GAP = 14
 
 /** Rect of the Goban's board-content area in wrapper coordinates. */
 interface ContentRect {
@@ -80,8 +85,9 @@ export function Board({
   candidateMoves = undefined,
   dimmedVertices = undefined,
   hoverGhostDisabled = false,
+  winrateOverlay = undefined,
 }: BoardProps) {
-  const { boardTheme } = useBoardTheme()
+  const { boardTheme, currentTheme } = useBoardTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [containerSize, setContainerSize] = useState<ContainerSize>({
@@ -90,6 +96,8 @@ export function Board({
   })
   const [contentRect, setContentRect] = useState<ContentRect | null>(null)
   const [flashError, setFlashError] = useState(false)
+  const [hoveredVertex, setHoveredVertex] = useState<Vertex | null>(null)
+  const hasWinrateOverlay = winrateOverlay !== undefined && winrateOverlay !== null
 
   useEffect(() => {
     const el = containerRef.current
@@ -111,7 +119,11 @@ export function Board({
   // Goban DOM) instead of reconstructing Goban's coordinate padding
   // arithmetic — immune to any future padding changes in Shudan.
   useEffect(() => {
-    if (!showOwnership && !showPolicy && (candidateMoves?.length ?? 0) === 0) {
+    if (
+      !showOwnership &&
+      !showPolicy &&
+      (candidateMoves?.length ?? 0) === 0
+    ) {
       setContentRect(null)
       return
     }
@@ -135,7 +147,14 @@ export function Board({
     const observer = new ResizeObserver(update)
     observer.observe(contentEl)
     return () => observer.disconnect()
-  }, [showOwnership, showPolicy, candidateMoves?.length, containerSize.width, containerSize.height, boardSize])
+  }, [
+    showOwnership,
+    showPolicy,
+    candidateMoves?.length,
+    containerSize.width,
+    containerSize.height,
+    boardSize,
+  ])
 
   useEffect(() => {
     if (flashTrigger === 0) return
@@ -196,6 +215,8 @@ export function Board({
   // content-sized (mobile) re-measurements deterministic (see above).
   const chromeWidth = Math.round(divisorW * vertexSize)
   const chromeHeight = Math.ceil(divisorH * vertexSize)
+  const winrateOverlayWidth = Math.min(WINRATE_OVERLAY_MAX_WIDTH, vertexSize * 1.25)
+  const winrateOverlayGap = Math.min(WINRATE_OVERLAY_MAX_GAP, vertexSize * 0.25)
 
   // Ghost preview: no marker passed → Goban renders a faint ghost stone
   // (currentPlayer color, ~0.35 opacity) on the hovered empty vertex,
@@ -212,6 +233,15 @@ export function Board({
     }
     return null
   }, [aiGhostVertex, hoverGhostDisabled])
+
+  const hoveredCandidate = candidateMoves?.find(
+    (candidate) =>
+      hoveredVertex !== null &&
+      candidate.vertex[0] === hoveredVertex[0] &&
+      candidate.vertex[1] === hoveredVertex[1] &&
+      signMap[hoveredVertex[1]]?.[hoveredVertex[0]] === 0,
+  )
+  const hoveredStoneUrl = currentPlayer === 1 ? currentTheme.blackStoneUrl : currentTheme.whiteStoneUrl
 
   // Ownership marks skip candidate-move vertices: the numeric candidate
   // marker is drawn there, and the overlays would stack on top of each other.
@@ -301,6 +331,7 @@ export function Board({
         ref={wrapRef}
         className="board-goban-wrap"
         style={{ position: 'relative', width: chromeWidth, height: chromeHeight }}
+        onMouseLeave={() => setHoveredVertex(null)}
       >
         <Goban
           className={`shudan-theme-${boardTheme}`}
@@ -310,10 +341,28 @@ export function Board({
           currentPlayer={currentPlayer}
           {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
           {...(onVertexClick !== undefined ? { onVertexClick } : {})}
+          {...(candidateMoves !== undefined && candidateMoves.length > 0
+            ? { onVertexMouseMove: (_event: React.MouseEvent, vertex: Vertex) => setHoveredVertex(vertex) }
+            : {})}
           {...(ghostMarker !== null ? { ghostMarker } : {})}
           {...(combinedMarkerMap !== undefined ? { markerMap: combinedMarkerMap } : {})}
           {...(heatMap !== undefined ? { heatMap } : {})}
         />
+        {hasWinrateOverlay && (
+          <div
+            className="board-winrate-overlay"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -winrateOverlayWidth - winrateOverlayGap,
+              width: winrateOverlayWidth,
+              height: '100%',
+              fontSize: `${Math.min(11, Math.max(6, winrateOverlayWidth * 0.32))}px`,
+            }}
+          >
+            {winrateOverlay}
+          </div>
+        )}
         {(ownershipMarksList !== null || policyMarksList !== null || candidateMoves !== undefined) && contentRect !== null && (
           <svg
             className="ownership-overlay"
@@ -361,15 +410,38 @@ export function Board({
               const [x, y] = candidate.vertex
               const cx = x + 0.5
               const cy = y + 0.5
-              const scoreLead = `${candidate.scoreLead >= 0 ? '+' : ''}${candidate.scoreLead.toFixed(1)}`
+              const scoreDelta = `${candidate.scoreDelta >= 0 ? '+' : ''}${candidate.scoreDelta.toFixed(1)}`
               return (
                 <g key={`candidate-${x}-${y}`}>
+                  <title>
+                    {`형세 변화: ${scoreDelta}집 (현재 둘 차례 기준), 탐색 ${candidate.visits}회`}
+                  </title>
                   <circle
                     cx={cx}
                     cy={cy}
                     r="0.43"
                     className={`candidate-info-circle${index === 0 ? ' candidate-info-circle-primary' : ''}`}
                   />
+                  {hoveredCandidate === candidate &&
+                    (hoveredStoneUrl ? (
+                      <image
+                        className="candidate-hover-stone"
+                        href={hoveredStoneUrl}
+                        x={cx - 0.43}
+                        y={cy - 0.43}
+                        width="0.86"
+                        height="0.86"
+                        preserveAspectRatio="xMidYMid meet"
+                      />
+                    ) : (
+                      <circle
+                        className="candidate-hover-stone-flat"
+                        cx={cx}
+                        cy={cy}
+                        r="0.38"
+                        fill={currentTheme.stones[currentPlayer === 1 ? 'black' : 'white'].backgroundColor}
+                      />
+                    ))}
                   <text
                     x={cx}
                     y={cy - 0.11}
@@ -377,7 +449,7 @@ export function Board({
                     textAnchor="middle"
                     dominantBaseline="central"
                   >
-                    {scoreLead}
+                    {scoreDelta}
                   </text>
                   <text
                     x={cx}

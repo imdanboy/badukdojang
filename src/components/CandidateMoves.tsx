@@ -1,7 +1,7 @@
 import * as React from 'react'
 /*
  * CandidateMoves - Sidebar panel showing top-3 engine candidate moves.
- * Each row: letter badge (A/B/C), vertex, winrate%, scoreLead, PV preview.
+ * Each row: letter badge (A/B/C), vertex, winrate%, score change, PV preview.
  * Clicking a row plays that move (study/hint mode). Disabled during AI turn.
  *
  * Design system: matches ControlBar/EngineSettings dark panel
@@ -16,8 +16,8 @@ export interface CandidateMove {
   readonly winrate: number
   /** KataGo search visits for this move. */
   readonly visits: number
-  /** Score lead in points (positive = current player ahead). */
-  readonly scoreLead: number
+  /** Score change from the current position (positive = better for the player to move). */
+  readonly scoreDelta: number
   /** Principal variation move list (GTP vertex strings, e.g. "D5"). */
   readonly pv: readonly string[]
 }
@@ -44,9 +44,9 @@ function formatWinrate(winrate: number): string {
   return `${pct.toFixed(1)}%`
 }
 
-function formatScoreLead(scoreLead: number): string {
-  const sign = scoreLead >= 0 ? '+' : ''
-  return `${sign}${scoreLead.toFixed(1)}`
+function formatScoreDelta(scoreDelta: number): string {
+  const sign = scoreDelta >= 0 ? '+' : ''
+  return `${sign}${scoreDelta.toFixed(1)}`
 }
 
 function formatPvPreview(pv: readonly string[]): string {
@@ -148,8 +148,11 @@ export function CandidateMoves({
             <span style={statStyle}>
               {formatWinrate(candidate.winrate)}
             </span>
-            <span style={statStyle}>
-              {formatScoreLead(candidate.scoreLead)}
+            <span
+              style={statStyle}
+              title="현재 위치 대비 예상 점수 변화 (현재 둘 차례 기준)"
+            >
+              {formatScoreDelta(candidate.scoreDelta)}
             </span>
             <span style={pvStyle} title={candidate.pv.join(' ')}>
               {formatPvPreview(candidate.pv) || '—'}

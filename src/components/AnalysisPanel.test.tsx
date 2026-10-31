@@ -114,10 +114,11 @@ describe('formatScoreLead', () => {
 })
 
 describe('AnalysisPanel component', () => {
-  test('renders "흑 승률: 53.2%" for winrate 0.532', () => {
+  test('renders a percentage-free label for winrate 0.532', () => {
     const analysis = makeAnalysis({ winrate: 0.532 })
     render(<AnalysisPanel analysis={analysis} loading={false} error={null} engineEnabled={true} />)
-    expect(screen.getByText(/흑 승률:/).textContent).toContain('53.2%')
+    expect(screen.getByText('승률')).toBeTruthy()
+    expect(screen.queryByText('53.2%')).toBeNull()
   })
 
   test('renders bar with black fill width matching winrate', () => {
@@ -130,11 +131,12 @@ describe('AnalysisPanel component', () => {
     expect(whiteBar.style.width).toBe('40%')
   })
 
-  test('shows legend with both black and white percentages', () => {
+  test('shows color labels without numeric percentages', () => {
     const analysis = makeAnalysis({ winrate: 0.7 })
     render(<AnalysisPanel analysis={analysis} loading={false} error={null} engineEnabled={true} />)
-    expect(screen.getByText(/흑 70\.0%/)).toBeTruthy()
-    expect(screen.getByText(/백 30\.0%/)).toBeTruthy()
+    expect(screen.getByText('흑')).toBeTruthy()
+    expect(screen.getByText('백')).toBeTruthy()
+    expect(screen.queryByText(/70\.0%|30\.0%/)).toBeNull()
   })
 
   test('disabled state when engine off', () => {
@@ -177,5 +179,47 @@ describe('AnalysisPanel component', () => {
     const marker = bar!.children[2] as HTMLElement
     expect(marker).not.toBeFalsy()
     expect(marker.style.left).toBe('50%')
+  })
+
+  test('vertical bar allocates black and white winrates top-to-bottom', () => {
+    render(
+      <AnalysisPanel
+        analysis={makeAnalysis({ winrate: 0.68, scoreLead: 4.2 })}
+        loading={false}
+        error={null}
+        engineEnabled={true}
+        orientation="vertical"
+      />,
+    )
+
+    const black = document.querySelector('.winrate-vertical-black') as HTMLElement
+    const white = document.querySelector('.winrate-vertical-white') as HTMLElement
+    expect(black.style.height).toBe('68%')
+    expect(white.style.height).toBe('32%')
+    expect(black.textContent).toBe('')
+    expect(white.textContent).toBe('')
+    expect(document.querySelector('.winrate-vertical-score-black')?.textContent).toBe('4.2')
+    expect(document.querySelector('.winrate-vertical-score-white')).toBeNull()
+  })
+
+  test('shows a positive score margin in White section when White leads', () => {
+    render(
+      <AnalysisPanel
+        analysis={makeAnalysis({ winrate: 0.37, scoreLead: -3.6 })}
+        loading={false}
+        error={null}
+        engineEnabled={true}
+        orientation="vertical"
+      />,
+    )
+
+    const black = document.querySelector('.winrate-vertical-black') as HTMLElement
+    const white = document.querySelector('.winrate-vertical-white') as HTMLElement
+    expect(black.style.height).toBe('37%')
+    expect(white.style.height).toBe('63%')
+    expect(black.textContent).toBe('')
+    expect(white.textContent).toBe('')
+    expect(document.querySelector('.winrate-vertical-score-black')).toBeNull()
+    expect(document.querySelector('.winrate-vertical-score-white')?.textContent).toBe('3.6')
   })
 })

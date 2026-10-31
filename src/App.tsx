@@ -2,7 +2,7 @@
  * badukdojang — game screen composition.
  *
  * Layout (OGS-inspired): top bar + three columns — a reserved left rail
- * (content TBD, empty for now), the board as the dominant center column,
+ * (board-aligned winrate meter), the board as the dominant center column,
  * and the right column with playback controls + core game controls
  * (GameSidebar). Non-core configuration (engine tuning, board theme)
  * lives in SettingsModal; per-game setup (size, mode, difficulty) in
@@ -27,6 +27,7 @@ import type { SignMap, Vertex } from '@kaya/goboard'
 import type { BoardMap, Marker } from '@kaya/shudan'
 import { BoardThemeProvider } from '@kaya/themes'
 import { Board } from './components/Board.tsx'
+import { AnalysisPanel } from './components/AnalysisPanel.tsx'
 import { TopBar } from './components/TopBar.tsx'
 import { GameSidebar } from './components/GameSidebar.tsx'
 import { PlaybackBar } from './components/PlaybackBar.tsx'
@@ -462,13 +463,14 @@ export function App() {
       result.push({
         vertex: parsed,
         visits: bm.visits,
-        winrate: bm.winrate,
-        scoreLead: bm.scoreLead,
+        winrate: gameState.currentPlayer === 1 ? bm.winrate : 1 - bm.winrate,
+        scoreDelta:
+          gameState.currentPlayer * (bm.scoreLead - (winrateAnalysis.scoreLead ?? 0)),
         pv: bm.pv ?? [],
       })
     }
     return result
-  }, [winrateAnalysis, gameMode, boardSize])
+  }, [winrateAnalysis, gameMode, boardSize, gameState.currentPlayer])
 
   const candidateMarkers = useMemo(
     () =>
@@ -476,7 +478,7 @@ export function App() {
         .filter((c): c is CandidateMove & { vertex: Vertex } => c.vertex !== 'pass')
         .map((c) => ({
           vertex: c.vertex,
-          scoreLead: c.scoreLead,
+          scoreDelta: c.scoreDelta,
           visits: c.visits,
         })),
     [candidates],
@@ -959,6 +961,17 @@ export function App() {
               candidateMoves={showCandidates ? candidateMarkers : undefined}
               dimmedVertices={isScoring ? effectiveDeadStones : undefined}
               hoverGhostDisabled={isAiThinking}
+              winrateOverlay={
+                showWinrate && !zenMode ? (
+                  <AnalysisPanel
+                    analysis={winrateAnalysis}
+                    loading={winrateLoading}
+                    error={winrateError}
+                    engineEnabled={engineSettings.enabled}
+                    orientation="vertical"
+                  />
+                ) : undefined
+              }
             />
           </div>
 

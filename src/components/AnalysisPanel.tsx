@@ -23,6 +23,8 @@ export interface AnalysisPanelProps {
   error: string | null
   /** Whether the engine is enabled. When off, the panel is dormant. */
   engineEnabled: boolean
+  /** Vertical board-side display on desktop; horizontal panel on narrow layouts. */
+  orientation?: 'horizontal' | 'vertical'
 }
 
 // --- Style helpers (match EngineSettings / ControlBar design system) --------
@@ -149,39 +151,89 @@ export function AnalysisPanel({
   loading,
   error,
   engineEnabled,
+  orientation = 'horizontal',
 }: AnalysisPanelProps) {
-if (!engineEnabled) {
+  const blackWinrate = getBlackWinrate(analysis)
+  const hasWinrate = engineEnabled && blackWinrate !== null && error === null
+  const blackPct = hasWinrate ? Number(formatWinratePct(blackWinrate)) : 50
+  const whitePct = 100 - blackPct
+  const scoreLead = engineEnabled && error === null ? getScoreLead(analysis) : null
+
+  if (orientation === 'vertical') {
+    const scoreLabel =
+      scoreLead === null || scoreLead === 0
+        ? ''
+        : `; ${scoreLead > 0 ? '흑' : '백'} ${Math.abs(scoreLead).toFixed(1)}집 우세`
+    const state = !engineEnabled
+      ? 'disabled'
+      : error !== null
+        ? 'error'
+        : loading
+          ? 'loading'
+          : hasWinrate
+            ? 'ready'
+            : 'idle'
+
     return (
-      <div style={panelStyle} id="analysis-panel" data-state="disabled">
-        <span style={titleStyle}>흑 승률</span>
+      <div
+        className="analysis-panel-vertical"
+        id="winrate-board-panel"
+        data-state={state}
+        role="img"
+        aria-label={`흑 승률 ${hasWinrate ? `${blackPct.toFixed(1)}%` : '—'}, 백 승률 ${hasWinrate ? `${whitePct.toFixed(1)}%` : '—'}${scoreLabel}`}
+        title={error ?? undefined}
+      >
+        <div className="winrate-vertical-track" id="winrate-vertical-bar">
+          <div
+            className="winrate-vertical-black"
+            style={{ height: `${blackPct}%` }}
+            data-winrate={hasWinrate ? blackPct : undefined}
+          />
+          <div
+            className="winrate-vertical-white"
+            style={{ height: `${whitePct}%` }}
+            data-winrate={hasWinrate ? whitePct : undefined}
+          />
+          {scoreLead !== null && scoreLead > 0 && (
+            <span className="winrate-vertical-score winrate-vertical-score-black">
+              {scoreLead.toFixed(1)}
+            </span>
+          )}
+          {scoreLead !== null && scoreLead < 0 && (
+            <span className="winrate-vertical-score winrate-vertical-score-white">
+              {Math.abs(scoreLead).toFixed(1)}
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (!engineEnabled) {
+    return (
+      <div className="analysis-panel-horizontal" style={panelStyle} id="analysis-panel" data-state="disabled">
+        <span style={titleStyle}>승률</span>
         <span style={mutedStyle}>승률 분석을 위해 엔진을 켜주세요.</span>
       </div>
     )
   }
 
-  const blackWinrate = getBlackWinrate(analysis)
-  const hasWinrate = blackWinrate !== null
-  const scoreLead = getScoreLead(analysis)
   const scoreLeadText = scoreLead === null ? '—' : formatScoreLead(scoreLead)
 
   if (!hasWinrate && !loading && error === null) {
     return (
-      <div style={panelStyle} id="analysis-panel" data-state="idle">
-        <span style={titleStyle}>흑 승률</span>
+      <div className="analysis-panel-horizontal" style={panelStyle} id="analysis-panel" data-state="idle">
+        <span style={titleStyle}>승률</span>
         <span style={mutedStyle}>분석 대기 중…</span>
         <span id="score-lead">집 차이: —</span>
       </div>
     )
   }
 
-  const blackPct = hasWinrate ? Number(formatWinratePct(blackWinrate!)) : 0
-  const whitePct = 100 - blackPct
-
   return (
-    <div style={panelStyle} id="analysis-panel" data-state="ready">
+    <div className="analysis-panel-horizontal" style={panelStyle} id="analysis-panel" data-state="ready">
       <span style={titleStyle} id="winrate-label">
-        흑 승률:{' '}
-        {hasWinrate ? `${formatWinratePct(blackWinrate!)}%` : '—'}
+        승률
       </span>
 
       <div style={barContainerStyle} id="winrate-bar">
@@ -199,8 +251,8 @@ if (!engineEnabled) {
       </div>
 
       <div style={legendStyle}>
-        <span>흑 {hasWinrate ? `${formatWinratePct(blackWinrate!)}%` : '—'}</span>
-        <span>백 {hasWinrate ? `${formatWinratePct(1 - blackWinrate!)}%` : '—'}</span>
+        <span>흑</span>
+        <span>백</span>
       </div>
 
       <div style={scoreLeadStyle} id="score-lead">
