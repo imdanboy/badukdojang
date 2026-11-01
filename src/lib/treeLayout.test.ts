@@ -2,7 +2,6 @@ import { describe, expect, test } from 'vitest'
 import { appendMove, appendPass, createGameTree, navigateToNode } from './gameTree.ts'
 import { GameTree } from './gameTree.ts'
 import {
-  blackPerspectiveWinrate,
   buildWinratePoints,
   collectAnalysisTargets,
   getFirstPlayer,
@@ -246,14 +245,6 @@ describe('getFirstPlayer / getPlayerToPlayAtNode', () => {
   })
 })
 
-describe('blackPerspectiveWinrate', () => {
-  test('player-to-move perspective converts to Black perspective', () => {
-    expect(blackPerspectiveWinrate(0.7, 1)).toBe(0.7)
-    expect(blackPerspectiveWinrate(0.7, -1)).toBeCloseTo(0.3)
-    expect(blackPerspectiveWinrate(0.5, -1)).toBeCloseTo(0.5)
-  })
-})
-
 describe('collectAnalysisTargets', () => {
   test('covers all branches in DFS pre-order and skips the root', () => {
     const { tree, ids } = buildTreeWithVariation()
@@ -376,7 +367,7 @@ describe('collectAnalysisTargets', () => {
 })
 
 describe('buildWinratePoints', () => {
-  test('charts the current path with Black-perspective winrates', () => {
+  test('charts Black-perspective winrates without alternating by player to move', () => {
     const { tree, ids } = buildTreeWithVariation()
     // Cursor at variation tip (ids[4]).
     const cache = new Map<string, SgfAnalysisEntry>()
@@ -384,19 +375,17 @@ describe('buildWinratePoints', () => {
       analysis: { id: 't', winrate: w, scoreLead: 0 },
       durationMs: null,
     })
-    // KataGo winrate is PLAYER-TO-MOVE perspective:
-    //   ids[1] = after move 1 → White to play → black = 1 - 0.6 = 0.4
-    //   ids[2] = after move 2 → Black to play → black = 0.55
-    //   ids[4] = after move 3 (variation) → White to play → black = 1 - 0.2 = 0.8
-    cache.set(ids[1], entryFor(0.6))
-    cache.set(ids[2], entryFor(0.55))
-    cache.set(ids[4], entryFor(0.2))
+    // The analysis config reports BLACK-perspective values at every node.
+    // A steady Black advantage must remain steady across alternating turns.
+    cache.set(ids[1], entryFor(0.78))
+    cache.set(ids[2], entryFor(0.8))
+    cache.set(ids[4], entryFor(0.82))
 
     const points = buildWinratePoints(tree, cache)
     expect(points.map((p) => p.nodeId)).toEqual([ids[1], ids[2], ids[4]])
-    expect(points[0]).toMatchObject({ moveNumber: 1, winrate: 0.4 })
-    expect(points[1]).toMatchObject({ moveNumber: 2, winrate: 0.55 })
-    expect(points[2]).toMatchObject({ moveNumber: 3, winrate: 0.8 })
+    expect(points[0]).toMatchObject({ moveNumber: 1, winrate: 0.78 })
+    expect(points[1]).toMatchObject({ moveNumber: 2, winrate: 0.8 })
+    expect(points[2]).toMatchObject({ moveNumber: 3, winrate: 0.82 })
   })
 
   test('uncached positions are skipped, not invented', () => {

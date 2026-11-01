@@ -8,8 +8,8 @@
  *   - Node ids are normalized to strings (SGF parsing can produce numbers).
  *   - The "current path" is the node chain root → tree.currentId; redo/undo
  *     and the tree view all navigate along it.
- *   - Winrate from KataGo is player-to-move perspective; helpers here convert
- *     to a consistent Black perspective for graphing.
+ *   - The analysis engine is configured to report winrates from Black's
+ *     perspective, which the graph uses directly.
  */
 import type { Vertex } from '@kaya/goboard'
 import type { GameTree, GameTreeNode } from './gameTree.ts'
@@ -43,17 +43,6 @@ export function getPlayerToPlayAtNode(
     if (data.B !== undefined || data.W !== undefined) moves += 1
   }
   return moves % 2 === 0 ? first : ((first === 1 ? -1 : 1) as 1 | -1)
-}
-
-/**
- * KataGo reports winrate from the perspective of the player to move.
- * Convert to a consistent Black perspective (0 = White wins, 1 = Black wins).
- */
-export function blackPerspectiveWinrate(
-  winrate: number,
-  playerToPlay: 1 | -1,
-): number {
-  return playerToPlay === 1 ? winrate : 1 - winrate
 }
 
 // --- Tree layout (visualization) ----------------------------------------------
@@ -297,11 +286,10 @@ export function buildWinratePoints(
     const wr = analysis?.winrate
     if (typeof wr !== 'number' || Number.isNaN(wr)) continue
 
-    const playerToPlay = getPlayerToPlayAtNode(tree, node.id)
     points.push({
       nodeId: String(node.id),
       moveNumber,
-      winrate: blackPerspectiveWinrate(wr, playerToPlay),
+      winrate: wr,
     })
   }
   return points
