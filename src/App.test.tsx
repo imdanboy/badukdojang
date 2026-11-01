@@ -177,8 +177,10 @@ describe('App', () => {
     expect(document.querySelector('.player-turn-yinyang-black')?.getAttribute('transform')).toBe(
       'translate(0 64) scale(1 -1)',
     )
-    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
     expect(document.querySelector('.player-turn-count-dot-white')?.getAttribute('cy')).toBe('17')
+    expect(document.querySelector('.player-turn-count-white')?.getAttribute('y')).toBe('17')
+    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
+    expect(document.querySelector('.player-turn-count-black')?.getAttribute('y')).toBe('47')
     expect(
       document.querySelector('.player-turn-active-lobe')?.getAttribute('data-active-lobe'),
     ).toBe('black')
@@ -200,8 +202,10 @@ describe('App', () => {
     )
     expect(document.querySelector('.player-turn-count-black')?.textContent).toBe('0')
     expect(document.querySelector('.player-turn-count-white')?.textContent).toBe('0')
-    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
     expect(document.querySelector('.player-turn-count-dot-white')?.getAttribute('cy')).toBe('17')
+    expect(document.querySelector('.player-turn-count-white')?.getAttribute('y')).toBe('17')
+    expect(document.querySelector('.player-turn-count-dot-black')?.getAttribute('cy')).toBe('47')
+    expect(document.querySelector('.player-turn-count-black')?.getAttribute('y')).toBe('47')
 
     // requestMove should NOT have been called
     expect(requestMoveMock).not.toHaveBeenCalled()
@@ -224,6 +228,31 @@ describe('App', () => {
       expect(document.querySelector(`.game-sidebar #${id}`)).toBeNull()
     }
     expect(toolbar?.querySelectorAll('.analysis-toggle-icon')).toHaveLength(5)
+  })
+
+  test("black's captured white stones are counted in the white dot on the black lobe", async () => {
+    render(<App />)
+
+    await clickVertex(1, 0, 19)
+    await clickVertex(0, 0, 19)
+    await clickVertex(0, 1, 19)
+
+    expect(document.querySelector('.player-turn-count-white')?.textContent).toBe('1')
+    expect(document.querySelector('.player-turn-count-black')?.textContent).toBe('0')
+    expect(document.querySelector('.player-turn-count-white')?.getAttribute('y')).toBe('17')
+  })
+
+  test("white's captured black stones are counted in the black dot on the white lobe", async () => {
+    render(<App />)
+
+    await clickVertex(18, 18, 19)
+    await clickVertex(17, 18, 19)
+    await clickVertex(9, 9, 19)
+    await clickVertex(18, 17, 19)
+
+    expect(document.querySelector('.player-turn-count-white')?.textContent).toBe('0')
+    expect(document.querySelector('.player-turn-count-black')?.textContent).toBe('1')
+    expect(document.querySelector('.player-turn-count-black')?.getAttribute('y')).toBe('47')
   })
 
   test('winrate toggle anchors the vertical bar beside the board', () => {

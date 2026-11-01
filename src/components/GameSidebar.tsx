@@ -138,6 +138,7 @@ function PlayerCard({
           }
           data-active-lobe={isBlackTurn ? 'black' : 'white'}
         />
+        {/* Each player's captures sit on their lobe's opposite-color dot. */}
         <circle
           className="player-turn-count-dot player-turn-count-dot-white"
           cx="32"
@@ -150,7 +151,7 @@ function PlayerCard({
           y="17"
           fontSize={whiteCountSize}
         >
-          {whiteCaptures}
+          {blackCaptures}
         </text>
         <circle
           className="player-turn-count-dot player-turn-count-dot-black"
@@ -164,7 +165,7 @@ function PlayerCard({
           y="47"
           fontSize={blackCountSize}
         >
-          {blackCaptures}
+          {whiteCaptures}
         </text>
       </svg>
       <span id="turn-indicator" className="visually-hidden" aria-live="polite" aria-atomic="true">
