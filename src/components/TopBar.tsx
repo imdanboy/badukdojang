@@ -1,14 +1,19 @@
 /*
- * TopBar — slim header: app title, game-mode toggle (left-center),
- * quick toggles (sound / zen / settings) on the right.
+ * TopBar — slim header: app title, analysis toggles, and quick actions.
  * Non-core settings live behind the gear → SettingsModal (OGS pattern:
  * the game screen exposes only instant toggles).
  */
+import { TOOLBAR_SHORTCUTS } from '../lib/toolbarShortcuts.ts'
+import type { ToolbarShortcutId } from '../lib/toolbarShortcuts.ts'
 import type { GameMode } from '../lib/types.ts'
+
+/** Shortcut metadata keeps the visible `(n)` hints and titles in sync. */
+const SHORTCUT_BY_ID = Object.fromEntries(
+  TOOLBAR_SHORTCUTS.map((shortcut) => [shortcut.id, shortcut]),
+) as Record<ToolbarShortcutId, (typeof TOOLBAR_SHORTCUTS)[number]>
 
 export interface TopBarProps {
   gameMode: GameMode
-  onGameModeChange: (mode: GameMode) => void
   engineEnabled: boolean
   showWinrate: boolean
   onToggleWinrate: () => void
@@ -25,16 +30,6 @@ export interface TopBarProps {
   onToggleZen: () => void
   onOpenSettings: () => void
 }
-
-const modeBtnStyle = (active: boolean): React.CSSProperties => ({
-  padding: '6px 14px',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '13px',
-  background: active ? '#5a7fb5' : '#3b3b5c',
-  color: '#e0e0e0',
-})
 
 const iconBtnStyle = (active: boolean): React.CSSProperties => ({
   padding: '6px 10px',
@@ -111,24 +106,39 @@ function AnalysisIcon({ name }: { name: AnalysisIconName }) {
   )
 }
 
-function AnalysisToggleContent({
+/** Digit hint is separate from the accessible label, but shares one layout across buttons. */
+function ShortcutHint({ id }: { id: ToolbarShortcutId }) {
+  const digit = SHORTCUT_BY_ID[id].digit
+  if (digit === undefined) return null
+  return (
+    <span className="top-bar-shortcut-hint" aria-hidden="true">
+      ({digit})
+    </span>
+  )
+}
+
+function ToolbarButtonContent({
   icon,
   label,
+  shortcutId,
 }: {
-  icon: AnalysisIconName
+  icon?: AnalysisIconName
   label: string
+  shortcutId: ToolbarShortcutId
 }) {
   return (
-    <span className="analysis-toggle-content">
-      <AnalysisIcon name={icon} />
-      <span>{label}</span>
+    <span className="top-bar-button-content">
+      {icon && <AnalysisIcon name={icon} />}
+      <span className="top-bar-button-label">
+        <span>{label}</span>
+        <ShortcutHint id={shortcutId} />
+      </span>
     </span>
   )
 }
 
 export function TopBar({
   gameMode,
-  onGameModeChange,
   engineEnabled,
   showWinrate,
   onToggleWinrate,
@@ -152,78 +162,57 @@ export function TopBar({
         <span className="top-bar-title">바둑도장</span>
       </div>
 
-      <nav
-        className="top-bar-mode"
-        role="group"
-        aria-label="게임 모드"
-      >
-        <button
-          id="mode-selfplay"
-          style={modeBtnStyle(gameMode === 'selfplay')}
-          onClick={() => onGameModeChange('selfplay')}
-        >
-          놓아보기
-        </button>
-        <button
-          id="mode-ai"
-          style={modeBtnStyle(gameMode === 'ai')}
-          onClick={() => onGameModeChange('ai')}
-        >
-          AI 대국
-        </button>
-      </nav>
-
       <nav className="top-bar-analysis" role="group" aria-label="분석 표시">
-        <button
-          id="winrate-toggle"
-          style={analysisBtnStyle(showWinrate, !engineEnabled)}
-          onClick={onToggleWinrate}
-          disabled={!engineEnabled}
-          title={engineEnabled ? (showWinrate ? '승률 표시 끔' : '승률 표시 켬') : '엔진이 꺼져 있습니다'}
-          aria-pressed={showWinrate}
-        >
-          <AnalysisToggleContent icon="winrate" label="승률" />
-        </button>
         {gameMode === 'selfplay' && (
           <button
             id="candidates-toggle"
             style={analysisBtnStyle(showCandidates, !engineEnabled)}
             onClick={onToggleCandidates}
             disabled={!engineEnabled}
-            title={engineEnabled ? (showCandidates ? '후보 수 표시 끔' : '후보 수 표시 켬') : '엔진이 꺼져 있습니다'}
+            title={`${engineEnabled ? (showCandidates ? '후보 수 표시 끔' : '후보 수 표시 켬') : '엔진이 꺼져 있습니다'} · 단축키: ${SHORTCUT_BY_ID.candidates.keyLabel}`}
             aria-pressed={showCandidates}
           >
-            <AnalysisToggleContent icon="candidates" label="후보수" />
+            <ToolbarButtonContent icon="candidates" label="후보수" shortcutId="candidates" />
           </button>
         )}
-        <button
-          id="policy-toggle"
-          style={analysisBtnStyle(showPolicy, !engineEnabled)}
-          onClick={onTogglePolicy}
-          disabled={!engineEnabled}
-          title={engineEnabled ? (showPolicy ? '정책망 표시 끔' : '정책망 표시 켬') : '엔진이 꺼져 있습니다'}
-          aria-pressed={showPolicy}
-        >
-          <AnalysisToggleContent icon="policy" label="정책망" />
-        </button>
         <button
           id="ownership-toggle"
           style={analysisBtnStyle(showOwnership, !engineEnabled)}
           onClick={onToggleOwnership}
           disabled={!engineEnabled}
-          title={engineEnabled ? (showOwnership ? '형세 표시 끔' : '형세 표시 켬') : '엔진이 꺼져 있습니다'}
+          title={`${engineEnabled ? (showOwnership ? '형세 표시 끔' : '형세 표시 켬') : '엔진이 꺼져 있습니다'} · 단축키: ${SHORTCUT_BY_ID.ownership.keyLabel}`}
           aria-pressed={showOwnership}
         >
-          <AnalysisToggleContent icon="ownership" label="형세" />
+          <ToolbarButtonContent icon="ownership" label="형세" shortcutId="ownership" />
+        </button>
+        <button
+          id="winrate-toggle"
+          style={analysisBtnStyle(showWinrate, !engineEnabled)}
+          onClick={onToggleWinrate}
+          disabled={!engineEnabled}
+          title={`${engineEnabled ? (showWinrate ? '승률 표시 끔' : '승률 표시 켬') : '엔진이 꺼져 있습니다'} · 단축키: ${SHORTCUT_BY_ID.winrate.keyLabel}`}
+          aria-pressed={showWinrate}
+        >
+          <ToolbarButtonContent icon="winrate" label="승률" shortcutId="winrate" />
+        </button>
+        <button
+          id="policy-toggle"
+          style={analysisBtnStyle(showPolicy, !engineEnabled)}
+          onClick={onTogglePolicy}
+          disabled={!engineEnabled}
+          title={`${engineEnabled ? (showPolicy ? '정책망 표시 끔' : '정책망 표시 켬') : '엔진이 꺼져 있습니다'} · 단축키: ${SHORTCUT_BY_ID.policy.keyLabel}`}
+          aria-pressed={showPolicy}
+        >
+          <ToolbarButtonContent icon="policy" label="정책망" shortcutId="policy" />
         </button>
         <button
           id="analysis-summary-toggle"
           style={analysisBtnStyle(showSummary, false)}
           onClick={onToggleSummary}
-          title={showSummary ? '분석 요약 표시 끔' : '분석 요약 표시 켬'}
+          title={`${showSummary ? '분석 요약 표시 끔' : '분석 요약 표시 켬'} · 단축키: ${SHORTCUT_BY_ID.summary.keyLabel}`}
           aria-pressed={showSummary}
         >
-          <AnalysisToggleContent icon="summary" label="분석 요약" />
+          <ToolbarButtonContent icon="summary" label="분석 요약" shortcutId="summary" />
         </button>
       </nav>
 

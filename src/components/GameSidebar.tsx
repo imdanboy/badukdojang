@@ -17,6 +17,7 @@ import type { AnalysisMetadata } from '../lib/analysisSgf.ts'
 import type { GameState } from '../lib/gameState.ts'
 import type { GameMode } from '../lib/types.ts'
 import type { Vertex } from '@kaya/goboard'
+import { TOOLBAR_SHORTCUTS } from '../lib/toolbarShortcuts.ts'
 
 export interface GameSidebarProps {
   gameState: GameState
@@ -25,6 +26,7 @@ export interface GameSidebarProps {
   /** Bumped by the parent on every move/navigation to refresh derived state. */
   moveVersion: number
   gameMode: GameMode
+  onGameModeChange: (mode: GameMode) => void
   isAiThinking: boolean
   onAiMove: () => void
   onPass: () => void
@@ -181,6 +183,7 @@ export function GameSidebar({
   reviewPanel,
   moveVersion,
   gameMode,
+  onGameModeChange,
   isAiThinking,
   onAiMove,
   onPass,
@@ -203,6 +206,8 @@ export function GameSidebar({
   candidates,
   onSelectCandidate,
 }: GameSidebarProps) {
+  const selfplayShortcut = TOOLBAR_SHORTCUTS.find((shortcut) => shortcut.id === 'selfplay')!
+  const aiShortcut = TOOLBAR_SHORTCUTS.find((shortcut) => shortcut.id === 'ai')!
   const { isAtRoot, isAtLeaf } = useMemo(() => {
     const tree = gameState.gameTree
     const currentId = tree.currentId ?? tree.root.id
@@ -226,6 +231,28 @@ export function GameSidebar({
     >
       <section className="sidebar-group game-progress-section" aria-label="대국 진행">
         <h2 className="sidebar-group-title">대국 진행</h2>
+        <div className="sidebar-mode-switch" role="group" aria-label="게임 모드">
+          <button
+            id="mode-selfplay"
+            className={`sidebar-mode-button${gameMode === 'selfplay' ? ' active' : ''}`}
+            type="button"
+            onClick={() => onGameModeChange('selfplay')}
+            title={`놓아보기 · 단축키: ${selfplayShortcut.keyLabel}`}
+            aria-pressed={gameMode === 'selfplay'}
+          >
+            놓아보기 <span>{selfplayShortcut.keyLabel}</span>
+          </button>
+          <button
+            id="mode-ai"
+            className={`sidebar-mode-button${gameMode === 'ai' ? ' active' : ''}`}
+            type="button"
+            onClick={() => onGameModeChange('ai')}
+            title={`AI 대국 · 단축키: ${aiShortcut.keyLabel}`}
+            aria-pressed={gameMode === 'ai'}
+          >
+            AI 대국 <span>{aiShortcut.keyLabel}</span>
+          </button>
+        </div>
         {playbackBar}
         <PlayerCard gameState={gameState} moveVersion={moveVersion} />
 

@@ -211,23 +211,36 @@ describe('App', () => {
     expect(requestMoveMock).not.toHaveBeenCalled()
   })
 
-  test('analysis display toggles are grouped in the top bar, not the sidebar', () => {
+  test('analysis toggles stay in the top bar and game modes lead the progress section', () => {
     render(<App />)
 
     expect(document.querySelector('.top-bar-logo')?.getAttribute('src')).toBe('/favicon.svg')
     const toolbar = document.querySelector('.top-bar-analysis')
     expect(toolbar?.getAttribute('aria-label')).toBe('분석 표시')
-    for (const id of [
-      'winrate-toggle',
+    const analysisIds = [
       'candidates-toggle',
-      'policy-toggle',
       'ownership-toggle',
+      'winrate-toggle',
+      'policy-toggle',
       'analysis-summary-toggle',
-    ]) {
+    ]
+    for (const id of analysisIds) {
       expect(toolbar?.querySelector(`#${id}`)).not.toBeNull()
       expect(document.querySelector(`.game-sidebar #${id}`)).toBeNull()
     }
     expect(toolbar?.querySelectorAll('.analysis-toggle-icon')).toHaveLength(5)
+    expect(Array.from(toolbar!.querySelectorAll('button')).map((button) => button.id)).toEqual(
+      analysisIds,
+    )
+
+    const progress = document.querySelector('.game-progress-section')!
+    expect(progress.querySelector('#mode-selfplay')).not.toBeNull()
+    expect(progress.querySelector('#mode-ai')).not.toBeNull()
+    expect(
+      progress.querySelector('#mode-selfplay')!.compareDocumentPosition(
+        progress.querySelector('#playback-first')!,
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
   test("black's captured white stones are counted in the white dot on the black lobe", async () => {
@@ -755,6 +768,202 @@ describe('App layout — three columns, playback in the right function column', 
     expect(
       (document.getElementById('playback-first') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+})
+
+describe('Toolbar keyboard shortcuts', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  /** Fire a Ctrl+key combination at the window. */
+  function pressShortcut(
+    code: string,
+    modifiers: {
+      shiftKey?: boolean
+      ctrlKey?: boolean
+      altKey?: boolean
+      metaKey?: boolean
+      key?: string
+    } = {},
+  ): void {
+    fireEvent.keyDown(window, { code, ctrlKey: true, ...modifiers })
+  }
+
+  const isPressed = (id: string): boolean =>
+    document.getElementById(id)?.getAttribute('aria-pressed') === 'true'
+
+  // Mode buttons expose their selected state accessibly.
+  const isModeActive = isPressed
+
+  test('Ctrl+[ / Ctrl+] switches between 놓아보기 and AI 대국', () => {
+    render(<App />)
+
+    // Default is selfplay (후보수 button exists only in selfplay mode).
+    expect(document.getElementById('candidates-toggle')).not.toBeNull()
+    pressShortcut('BracketRight')
+    expect(document.getElementById('candidates-toggle')).toBeNull()
+    expect(isModeActive('mode-ai')).toBe(true)
+
+    pressShortcut('BracketLeft')
+    expect(isModeActive('mode-selfplay')).toBe(true)
+    expect(document.getElementById('candidates-toggle')).not.toBeNull()
+  })
+
+  test('matching uses KeyboardEvent.code for bracket shortcuts', () => {
+    render(<App />)
+
+    pressShortcut('BracketRight', { key: 'x' })
+    expect(isModeActive('mode-ai')).toBe(true)
+  })
+
+  test('Ctrl+1..Ctrl+5 follow analysis priority and respect the engine state', () => {
+    render(<App />)
+
+    pressShortcut('Digit1')
+    pressShortcut('Digit2')
+    pressShortcut('Digit3')
+    pressShortcut('Digit4')
+    expect(isPressed('candidates-toggle')).toBe(false)
+    expect(isPressed('ownership-toggle')).toBe(false)
+    expect(isPressed('winrate-toggle')).toBe(false)
+    expect(isPressed('policy-toggle')).toBe(false)
+    expect((document.getElementById('candidates-toggle') as HTMLButtonElement).disabled).toBe(true)
+
+    enableEngine()
+    pressShortcut('Digit1')
+    pressShortcut('Digit2')
+    pressShortcut('Digit3')
+    pressShortcut('Digit4')
+    pressShortcut('Digit5')
+    expect(isPressed('candidates-toggle')).toBe(true)
+    expect(isPressed('ownership-toggle')).toBe(true)
+    expect(document.querySelector('.board-col-with-winrate')).not.toBeNull()
+    expect(isPressed('winrate-toggle')).toBe(true)
+    expect(isPressed('policy-toggle')).toBe(true)
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
+  })
+
+  test('Ctrl+1 toggles 후보수 only in selfplay (hidden control in AI mode is inert)', () => {
+    render(<App />)
+    enableEngine()
+
+    pressShortcut('Digit1')
+    expect(isPressed('candidates-toggle')).toBe(true)
+
+    // Switch to AI mode: the button disappears and the shortcut does nothing.
+    pressShortcut('BracketRight')
+    expect(document.getElementById('candidates-toggle')).toBeNull()
+    pressShortcut('Digit1')
+    expect(isModeActive('mode-ai')).toBe(true)
+
+    // Back in selfplay the shortcut works again; the mode switch preserved
+    // the toggle state (still on from the earlier shortcut).
+    pressShortcut('BracketLeft')
+    expect(isPressed('candidates-toggle')).toBe(true)
+    pressShortcut('Digit1')
+    expect(isPressed('candidates-toggle')).toBe(false)
+  })
+
+  test('Ctrl+2 and Ctrl+4 toggle 형세 and 정책망, engine-gated', () => {
+    render(<App />)
+
+    pressShortcut('Digit2')
+    pressShortcut('Digit4')
+    expect(isPressed('policy-toggle')).toBe(false)
+    expect(isPressed('ownership-toggle')).toBe(false)
+    expect((document.getElementById('policy-toggle') as HTMLButtonElement).disabled).toBe(true)
+    expect((document.getElementById('ownership-toggle') as HTMLButtonElement).disabled).toBe(true)
+
+    enableEngine()
+    pressShortcut('Digit2')
+    pressShortcut('Digit4')
+    expect(isPressed('ownership-toggle')).toBe(true)
+    expect(isPressed('policy-toggle')).toBe(true)
+  })
+
+  test('Ctrl+5 toggles 분석 요약 (always available, no engine needed)', () => {
+    render(<App />)
+
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
+    expect(document.querySelector('.side-col .analysis-results-section')).toBeTruthy()
+
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+    expect(document.querySelector('.analysis-results-section')).toBeNull()
+  })
+
+  test('requires Ctrl and rejects plain digits and additional modifiers', () => {
+    render(<App />)
+
+    fireEvent.keyDown(window, { code: 'Digit5' })
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+
+    const rejected: Parameters<typeof pressShortcut>[1][] = [
+      { ctrlKey: false },
+      { shiftKey: true },
+      { altKey: true },
+      { metaKey: true },
+    ]
+    for (const modifiers of rejected) {
+      pressShortcut('Digit5', modifiers)
+    }
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+
+    // Ctrl+digit works after all the rejections.
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
+  })
+
+  test('shortcuts are suspended while a modal dialog is open', () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('new-game-action')!)
+    expect(document.querySelector('.modal-panel[role="dialog"]')).toBeTruthy()
+
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+
+    // The mode shortcut is equally suspended — still selfplay.
+    pressShortcut('BracketRight')
+    expect(document.getElementById('candidates-toggle')).not.toBeNull()
+  })
+
+  test('shortcuts are suspended while the toolbar is hidden (zen mode)', () => {
+    render(<App />)
+
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
+
+    // Enter zen mode: the toolbar (and the whole game chrome) disappears and
+    // shortcuts must stop running.
+    fireEvent.click(document.getElementById('zen-toggle')!)
+    expect(document.getElementById('analysis-summary-toggle')).toBeNull()
+    pressShortcut('Digit5')
+
+    // Exiting zen mode proves the zen-time press was ignored: the summary
+    // toggle kept the state it had before zen (still on), and the shortcut
+    // works again afterwards.
+    fireEvent.click(document.getElementById('zen-exit')!)
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+  })
+
+  test('ignored while an input has focus (typing elsewhere never toggles the toolbar)', () => {
+    render(<App />)
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    fileInput.focus()
+    fireEvent.keyDown(fileInput, { code: 'Digit5', ctrlKey: true })
+    expect(isPressed('analysis-summary-toggle')).toBe(false)
+    pressShortcut('Digit5')
+    expect(isPressed('analysis-summary-toggle')).toBe(true)
   })
 })
 

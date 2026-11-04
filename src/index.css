@@ -191,12 +191,6 @@ body {
   border: 0;
 }
 
-.top-bar-mode {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
 .top-bar-analysis {
   display: flex;
   align-items: center;
@@ -207,10 +201,25 @@ body {
   scrollbar-width: none;
 }
 
-.analysis-toggle-content {
+.top-bar-button-content {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.top-bar-button-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+/* Small digit hint beside a toolbar button label ("승률(3)"). */
+.top-bar-shortcut-hint {
+  opacity: 0.6;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .analysis-toggle-icon {
@@ -345,6 +354,38 @@ body {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.sidebar-mode-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.sidebar-mode-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid #3b3b5c;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sidebar-mode-button.active {
+  border-color: #5a7fb5;
+  background: #5a7fb5;
+}
+
+.sidebar-mode-button span {
+  color: #c5c5d5;
+  font-size: 10px;
 }
 
 .sidebar-game-actions {

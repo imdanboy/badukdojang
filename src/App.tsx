@@ -48,6 +48,8 @@ import { useEngine } from './hooks/useEngine.ts'
 import { useAnalysis } from './hooks/useAnalysis.ts'
 import { useTreeAnalysis } from './hooks/useTreeAnalysis.ts'
 import { useScoring } from './hooks/useScoring.ts'
+import { useToolbarShortcuts } from './hooks/useToolbarShortcuts.ts'
+import type { ToolbarShortcutActions } from './hooks/useToolbarShortcuts.ts'
 import type { BoardSize, GameMode, MoveNumberMode } from './lib/types.ts'
 import { createGameState } from './lib/gameState.ts'
 import type { GameState } from './lib/gameState.ts'
@@ -895,6 +897,40 @@ export function App() {
     void triggerAiMove()
   }
 
+  // --- Toolbar keyboard shortcuts (Ctrl+1..5, Ctrl+[, Ctrl+]) ----------------------
+  // Analysis order: 후보수(1), 형세(2), 승률(3), 정책망(4), 분석 요약(5).
+  // Game modes use Ctrl+[ and Ctrl+]. Contextual controls are honored by
+  // omitting their action — 후보수 only exists in selfplay mode and the
+  // engine-fed analysis toggles are disabled while the engine is off.
+  const shortcutsBlocked =
+    zenMode || // toolbar is not rendered in zen mode
+    settingsOpen ||
+    newGameOpen ||
+    screenshotImportOpen ||
+    computedScore !== null || // ScoringModal is open
+    engineError !== null // EngineErrorModal is open
+
+  const toolbarShortcutActions: ToolbarShortcutActions = {
+    selfplay: () => handleGameModeChange('selfplay'),
+    ai: () => handleGameModeChange('ai'),
+    candidates:
+      engineSettings.enabled && gameMode === 'selfplay'
+        ? () => setShowCandidates((prev) => !prev)
+        : undefined,
+    ownership: engineSettings.enabled
+      ? () => setShowOwnership((prev) => !prev)
+      : undefined,
+    winrate: engineSettings.enabled
+      ? () => setShowWinrate((prev) => !prev)
+      : undefined,
+    policy: engineSettings.enabled
+      ? () => setShowPolicy((prev) => !prev)
+      : undefined,
+    summary: () => setShowSummary((prev) => !prev),
+  }
+
+  useToolbarShortcuts(toolbarShortcutActions, shortcutsBlocked)
+
   // --- Tree dock resizer (pointer/touch/keyboard) ------------------------------
 
   const handleResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -956,7 +992,6 @@ export function App() {
           {!zenMode && (
             <TopBar
               gameMode={gameMode}
-              onGameModeChange={handleGameModeChange}
               engineEnabled={engineSettings.enabled}
               showWinrate={showWinrate}
               onToggleWinrate={() => setShowWinrate((prev) => !prev)}
@@ -1065,6 +1100,7 @@ export function App() {
                   />
                 }
                 gameMode={gameMode}
+                onGameModeChange={handleGameModeChange}
                 isAiThinking={isAiThinking}
                 onAiMove={handleAiMove}
                 onPass={handlePass}
