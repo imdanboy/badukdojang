@@ -406,16 +406,110 @@ body {
   min-height: 0;
 }
 
+/* Winrate graph dock (bottom, toggle-only, above the tree dock):
+   same fixed-pixel height pattern — the stage shrinks by its height.
+   The body scrolls internally so controls + chart never overflow it. */
+.graph-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.graph-dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(140px, 18vw, 240px);
+  gap: 12px;
+  padding: 10px 14px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.graph-dock-graph {
+  min-width: 0;
+  min-height: 0;
+}
+
+.graph-dock-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding-left: 12px;
+  border-left: 1px solid #3b3b5c;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.graph-dock-title {
+  flex: 0 0 auto;
+}
+
+.graph-dock-move-position {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: #a7a7c2;
+  font-size: 12px;
+}
+
+.graph-dock-move-position strong {
+  color: #f0f0f8;
+  font-size: clamp(22px, 2.5vw, 32px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.graph-dock-move-position small {
+  color: #a7a7c2;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.graph-dock-analysis-button {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px !important;
+}
+
+.graph-dock-progress,
+.graph-dock-status {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .graph-dock-body {
+    grid-template-columns: minmax(0, 1fr) 128px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .graph-dock-sidebar {
+    gap: 6px;
+    padding-left: 8px;
+  }
+}
+
 .tree-section {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-/* Vertical resize handle between the stage and the tree dock: a visible
+/* Vertical resize handles between the stage and a bottom dock: a visible
    separator bar with a grab-pill. Pointer (mouse/touch/pen) + keyboard
    operated; see App.tsx for the drag/keyboard logic. touch-action: none
    lets touch drags move the handle instead of scrolling the page. */
-.tree-resizer {
+.tree-resizer,
+.graph-resizer {
   flex: 0 0 auto;
   position: relative;
   height: 14px;
@@ -426,7 +520,8 @@ body {
   touch-action: none;
 }
 
-.tree-resizer::after {
+.tree-resizer::after,
+.graph-resizer::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -440,16 +535,20 @@ body {
 }
 
 .tree-resizer:hover::after,
-.tree-resizer:focus-visible::after {
+.graph-resizer:hover::after,
+.tree-resizer:focus-visible::after,
+.graph-resizer:focus-visible::after {
   opacity: 1;
 }
 
-.tree-resizer[data-dragging='true'] {
+.tree-resizer[data-dragging='true'],
+.graph-resizer[data-dragging='true'] {
   background: #2d2d52;
   border-color: #5a7fb5;
 }
 
-.tree-resizer:focus-visible {
+.tree-resizer:focus-visible,
+.graph-resizer:focus-visible {
   outline: 2px solid #5a7fb5;
   outline-offset: 2px;
 }

@@ -144,6 +144,12 @@ function enableEngine(): void {
   fireEvent.click(document.getElementById('settings-close')!)
 }
 
+/** The winrate graph dock is hidden by default — open it for the
+    full-tree analysis controls and the chart. */
+function openWinrateDock(): void {
+  fireEvent.click(document.getElementById('winrate-dock-toggle')!)
+}
+
 describe('App', () => {
   let requestMoveMock: ReturnType<typeof vi.fn>
   let requestAnalysisMock: ReturnType<typeof vi.fn>
@@ -1535,8 +1541,10 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
     render(<App />)
     enableEngine()
 
-    // Open the tree dock (hidden by default) for node navigation.
+    // Open the tree dock (hidden by default) for node navigation and the
+    // winrate dock for the analysis controls.
     fireEvent.click(document.getElementById('tree-toggle')!)
+    openWinrateDock()
 
     // 3 main-line moves + 1 variation after move 2 → 4 positions.
     await clickVertex(3, 3, 19)
@@ -1566,9 +1574,9 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
     const graph = document.getElementById('winrate-graph')!
     const points = graph.querySelectorAll('[data-winrate-point]')
     expect(points.length).toBe(3)
-    // Black perspective: after move 1 White is to play → 1-0.7 = 0.3.
-    expect(points[0]!.getAttribute('data-winrate')).toBe('0.300')
-    // After move 2 Black is to play → 0.7.
+    // KataGo winrate is reported in BLACK's perspective and the graph plots
+    // it directly (0.7 for every analyzed position here).
+    expect(points[0]!.getAttribute('data-winrate')).toBe('0.700')
     expect(points[1]!.getAttribute('data-winrate')).toBe('0.700')
 
     // Navigate to the main-line tip; the graph follows the branch.
@@ -1577,10 +1585,10 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
       const mainPoints = document.querySelectorAll('[data-winrate-point]')
       return mainPoints.length === 3 && mainPoints[2]!.getAttribute('data-move-number') === '3'
     })
-    // Same depths → same Black-perspective values on the other branch.
+    // Same depths → same values on the other branch.
     const mainPoints = document.querySelectorAll('[data-winrate-point]')
     expect(mainPoints[1]!.getAttribute('data-winrate')).toBe('0.700')
-    expect(mainPoints[2]!.getAttribute('data-winrate')).toBe('0.300')
+    expect(mainPoints[2]!.getAttribute('data-winrate')).toBe('0.700')
 
     // Clicking a graph point navigates to that node.
     fireEvent.click(mainPoints[0]!)
@@ -1601,6 +1609,7 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
 
     render(<App />)
     enableEngine()
+    openWinrateDock()
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -1622,6 +1631,7 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
 
   test('button is disabled while the engine is off', () => {
     render(<App />)
+    openWinrateDock()
     const btn = document.getElementById('tree-analysis-start') as HTMLButtonElement
     expect(btn.disabled).toBe(true)
   })
@@ -1629,6 +1639,7 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
   test('SGF-embedded KA positions are reused with zero engine calls and plotted', async () => {
     render(<App />)
     enableEngine()
+    openWinrateDock()
 
     // 5 moves; KA embedded on the FIRST move node (winrate 0.55,
     // player-to-move perspective).
@@ -1651,11 +1662,10 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
     // 5 positions total, 1 primed from KA → 4 engine calls.
     expect(requestAnalysisForPathMock).toHaveBeenCalledTimes(4)
 
-    // The KA position is plotted with the Black-perspective conversion
-    // (after move 1 White is to play → 1 - 0.55 = 0.45).
+    // The KA position is plotted directly (Black-perspective winrate 0.55).
     const points = document.querySelectorAll('[data-winrate-point]')
     expect(points.length).toBe(5)
-    expect(points[0]!.getAttribute('data-winrate')).toBe('0.450')
+    expect(points[0]!.getAttribute('data-winrate')).toBe('0.550')
   })
 
   test('playing a move mid-run invalidates the stale batch and resets progress', async () => {
@@ -1670,6 +1680,7 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
 
     render(<App />)
     enableEngine()
+    openWinrateDock()
 
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
@@ -1692,5 +1703,163 @@ describe('Review — full-tree batch analysis + winrate graph', () => {
       (document.getElementById('tree-analysis-start') as HTMLButtonElement).disabled,
     ).toBe(false)
     expect(katagoAdapter.abortOngoing as ReturnType<typeof vi.fn>).toHaveBeenCalled()
+  })
+})
+
+describe('Review — winrate graph dock (bottom, full width)', () => {
+  let requestAnalysisForPathMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    localStorage.clear()
+    requestAnalysisForPathMock = katagoAdapter.requestAnalysisForPath as ReturnType<typeof vi.fn>
+    requestAnalysisForPathMock.mockReset()
+    requestAnalysisForPathMock.mockResolvedValue({
+      id: 'batch',
+      winrate: 0.7,
+      scoreLead: 0,
+    })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+    cleanup()
+  })
+
+  test('hidden by default; the 승률 그래프 review button toggles it', () => {
+    render(<App />)
+
+    expect(document.querySelector('[data-testid="winrate-dock"]')).toBeNull()
+    expect(document.getElementById('winrate-graph-empty')).toBeNull()
+    // The old sidebar analysis entry is gone: 전체 분석 moved into the dock.
+    expect(document.getElementById('tree-analysis-start')).toBeNull()
+    const toggle = document.getElementById('winrate-dock-toggle') as HTMLButtonElement
+    expect(toggle).toBeTruthy()
+    expect(toggle.textContent).toBe('승률 그래프')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    // The 기보 트리 toggle is a separate, independent button.
+    expect(document.getElementById('tree-toggle')).toBeTruthy()
+
+    openWinrateDock()
+    expect(document.querySelector('[data-testid="winrate-dock"]')).toBeTruthy()
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+
+    openWinrateDock()
+    expect(document.querySelector('[data-testid="winrate-dock"]')).toBeNull()
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  test('initially empty graph state; analysis controls live inside the dock only', () => {
+    render(<App />)
+    openWinrateDock()
+
+    const dock = document.querySelector('[data-testid="winrate-dock"]')!
+    // Empty state: no chart points until a full analysis is started.
+    expect(dock.querySelector('#winrate-graph-empty')).toBeTruthy()
+    expect(dock.querySelectorAll('[data-winrate-point]').length).toBe(0)
+    expect(dock.querySelector('#winrate-graph')).toBeNull()
+
+    // 전체 분석 lives inside the dock — never in the sidebar/panel.
+    expect(document.querySelector('.side-col #tree-analysis-start')).toBeNull()
+    expect(document.querySelector('.game-sidebar #tree-analysis-start')).toBeNull()
+    const start = dock.querySelector('#tree-analysis-start') as HTMLButtonElement
+    expect(start).toBeTruthy()
+    expect(start.textContent).toBe('전체 분석')
+  })
+
+  test('graph appears only after the full-tree run starts and plots its results', async () => {
+    render(<App />)
+    enableEngine()
+    openWinrateDock()
+
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
+    // Still empty before the user starts the analysis.
+    expect(document.querySelectorAll('[data-winrate-point]').length).toBe(0)
+    expect(document.getElementById('winrate-graph-empty')).toBeTruthy()
+
+    fireEvent.click(document.getElementById('tree-analysis-start')!)
+    // While running: progress UI inside the dock and the graph already
+    // plotting whatever has landed.
+    await waitFor(() => {
+      expect(
+        document
+          .querySelector('[data-testid="winrate-dock"]')!
+          .querySelector('#tree-analysis-progress'),
+      ).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(document.querySelectorAll('[data-winrate-point]').length).toBe(2)
+    })
+    expect(document.getElementById('winrate-graph-empty')).toBeNull()
+
+    await waitFor(() => {
+      expect(document.getElementById('tree-analysis-status')?.textContent).toContain(
+        '전체 분석 완료',
+      )
+    })
+    // Chart stays after completion. KataGo winrate is reported in BLACK's
+    // perspective and the graph plots it directly (0.7 for every position).
+    const points = document.querySelectorAll('[data-winrate-point]')
+    expect(points.length).toBe(2)
+    expect(points[0]!.getAttribute('data-winrate')).toBe('0.700')
+  })
+
+  test('both open docks stack at the bottom in graph→tree order, full width', async () => {
+    render(<App />)
+    enableEngine()
+    openWinrateDock()
+    fireEvent.click(document.getElementById('tree-toggle')!)
+
+    const graphDock = document.querySelector('[data-testid="winrate-dock"]')!
+    const treeDock = document.querySelector('[data-testid="tree-dock"]')!
+    // DOM order == visual order: graph dock first, tree dock below it.
+    expect(
+      graphDock.compareDocumentPosition(treeDock) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // Both are outside the game layout/sidebar (full app width).
+    expect(document.querySelector('.game-layout')!.contains(graphDock)).toBe(false)
+    const review = document.querySelector('.review-panel')!
+    expect(graphDock.textContent).not.toContain('기보 트리')
+    // Full-width check: the dock cannot be inside the narrow side column.
+    expect(document.querySelector('.side-col')!.contains(graphDock)).toBe(false)
+    // Dock heights are modest fixed pixels (stage keeps the bulk).
+    expect(Number.parseFloat((graphDock as HTMLElement).style.height)).toBeLessThanOrEqual(1000)
+    expect(Number.parseFloat((treeDock as HTMLElement).style.height)).toBeLessThanOrEqual(1000)
+
+    // Sanity: review header keeps both toggles.
+    expect(review.querySelector('#tree-toggle')).toBeTruthy()
+    expect(review.querySelector('#winrate-dock-toggle')).toBeTruthy()
+  })
+
+  test('graph dock is keyboard-resizable and its bounds account for the tree dock', async () => {
+    render(<App />)
+    openWinrateDock()
+    fireEvent.click(document.getElementById('tree-toggle')!)
+
+    const graphResizer = document.querySelector('.graph-resizer') as HTMLElement
+    expect(graphResizer.getAttribute('role')).toBe('separator')
+    const before = Number(graphResizer.getAttribute('aria-valuenow'))
+
+    fireEvent.keyDown(graphResizer, { key: 'ArrowUp' })
+    expect(Number(graphResizer.getAttribute('aria-valuenow'))).toBeGreaterThan(before)
+
+    // Bounds clamp: Home = max under the shrunken stage, End = the minimum.
+    fireEvent.keyDown(graphResizer, { key: 'End' })
+    expect(Number(graphResizer.getAttribute('aria-valuenow'))).toBe(
+      Number(graphResizer.getAttribute('aria-valuemin')),
+    )
+    fireEvent.keyDown(graphResizer, { key: 'Home' })
+    const graphMax = Number(graphResizer.getAttribute('aria-valuemax'))
+    expect(graphMax).toBeLessThanOrEqual(
+      Number(graphResizer.getAttribute('aria-valuemin')) + 10000,
+    )
+
+    // Growing the graph past the stage reserve actually caps joint growth:
+    // graph max + tree now <= viewport minus the deskt stage reserve.
+    const treeResizer = document.querySelector('.tree-resizer') as HTMLElement
+    const treeNow = Number(treeResizer.getAttribute('aria-valuenow'))
+    expect(graphMax + treeNow).toBeLessThanOrEqual(window.innerHeight - 300)
   })
 })

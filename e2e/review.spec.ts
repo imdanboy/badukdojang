@@ -57,6 +57,13 @@ async function openTreeDock(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="game-tree-panel"]')).toHaveCount(1)
 }
 
+/** The winrate graph dock is hidden by default — open it for the analysis
+    controls and the chart. */
+async function openWinrateDock(page: Page): Promise<void> {
+  await page.locator('#winrate-dock-toggle').click()
+  await expect(page.locator('[data-testid="winrate-dock"]')).toHaveCount(1)
+}
+
 test.describe('Review — move numbers', () => {
   test.beforeEach(async ({ page }) => {
     await mockEngine(page)
@@ -301,7 +308,40 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
     await page.locator('#settings-close').click()
   })
 
+  test('winrate dock is hidden by default; opening shows an empty graph and the analysis button inside', async ({
+    page,
+  }) => {
+    // Hidden by default: no dock, no analysis button anywhere.
+    await expect(page.locator('[data-testid="winrate-dock"]')).toHaveCount(0)
+    await expect(page.locator('#tree-analysis-start')).toHaveCount(0)
+    await expect(page.locator('#winrate-dock-toggle')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+
+    await openWinrateDock(page)
+    await expect(page.locator('#winrate-dock-toggle')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    // Empty graph state until the user starts a full analysis.
+    await expect(page.locator('#winrate-graph-empty')).toBeVisible()
+    await expect(page.locator('[data-winrate-point]')).toHaveCount(0)
+
+    // The 전체 분석 button lives inside the dock, not in the sidebar.
+    const dock = page.locator('[data-testid="winrate-dock"]')
+    await expect(dock.locator('#tree-analysis-start')).toHaveText('전체 분석')
+    await expect(page.locator('.side-col #tree-analysis-start')).toHaveCount(0)
+    await expect(
+      page.locator('[data-testid="winrate-dock"] .review-panel'),
+    ).toHaveCount(0)
+    // The 기보 트리 toggle stays a separate review button.
+    await expect(page.locator('.review-panel #tree-toggle')).toBeVisible()
+  })
+
   test('analyzes all branches, shows progress, then graphs the branch', async ({ page }) => {
+    await openWinrateDock(page)
     await page.locator('#tree-analysis-start').click()
 
     // Progress UI while running.
@@ -311,17 +351,39 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
     await expect(page.locator('#tree-analysis-status')).toContainText('전체 분석 완료', {
       timeout: 15000,
     })
+    await expect(page.locator('[data-testid="winrate-move-position"]')).toContainText(
+      '5 / 5수',
+    )
 
-    // Winrate graph for the current branch (main line, 5 points).
+    // Winrate graph for the current branch (main line, 5 points). The mock
+    // returns a Black-perspective winrate of 0.6 for every position.
     const points = page.locator('[data-winrate-point]')
     await expect(points).toHaveCount(5)
-    // Black perspective: after odd moves White is to play → 1-0.6 = 0.4.
-    await expect(points.nth(0)).toHaveAttribute('data-winrate', '0.400')
+    await expect(points.nth(0)).toHaveAttribute('data-winrate', '0.600')
     await expect(points.nth(1)).toHaveAttribute('data-winrate', '0.600')
 
     // Clicking the move-2 point navigates to that node.
     await points.nth(1).click()
     await expect(page.locator('.playback-counter')).toContainText('Move 2')
+    await expect(page.locator('[data-testid="winrate-move-position"]')).toContainText(
+      '2 / 5수',
+    )
+    await expect(points).toHaveCount(5)
+
+    // Keyboard navigation follows the graph cursor focus/highlight instead
+    // of leaving the previously clicked point focused as a second highlight.
+    await page.keyboard.press('ArrowRight')
+    await expect(page.locator('.playback-counter')).toContainText('Move 3')
+    await expect(page.locator('[data-testid="winrate-move-position"]')).toContainText(
+      '3 / 5수',
+    )
+    await expect(points.nth(1)).toHaveAttribute('data-current', 'false')
+    await expect(points.nth(2)).toHaveAttribute('data-current', 'true')
+    await expect(page.locator('[data-winrate-point]:focus')).toHaveAttribute(
+      'data-move-number',
+      '3',
+    )
+    await expect(page.locator('[data-winrate-point][data-current="true"]')).toHaveCount(1)
 
     // Switch to the variation branch: the graph follows the selected line.
     await page.locator('[data-tree-node]').nth(7).click()
@@ -337,6 +399,7 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
       return new Promise(() => {})
     })
 
+    await openWinrateDock(page)
     await page.locator('#tree-analysis-start').click()
     await expect(page.locator('#tree-analysis-cancel')).toBeVisible()
 
@@ -346,6 +409,87 @@ test.describe('Review — full-tree batch analysis + winrate graph', () => {
     // Progress UI is gone; the start button is back for a resume run.
     await expect(page.locator('#tree-analysis-progress')).toHaveCount(0)
     await expect(page.locator('#tree-analysis-start')).toBeVisible()
+  })
+
+  test('both open docks stack full-width at the bottom: graph then tree, one screen', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+    await page.waitForSelector('.shudan-goban')
+    await loadVariationsSgf(page)
+    await openTreeDock(page)
+    await openWinrateDock(page)
+
+    const pageState = await page.evaluate(() => ({
+      graphDockTop: document
+        .querySelector('[data-testid="winrate-dock"]')!
+        .getBoundingClientRect().top,
+      graphDockBottom: document
+        .querySelector('[data-testid="winrate-dock"]')!
+        .getBoundingClientRect().bottom,
+      treeDockTop: document.querySelector('[data-testid="tree-dock"]')!
+        .getBoundingClientRect().top,
+      graphLeft: document
+        .querySelector('[data-testid="winrate-dock"]')!
+        .getBoundingClientRect().left,
+      graphRight: document
+        .querySelector('[data-testid="winrate-dock"]')!
+        .getBoundingClientRect().right,
+      graphAreaWidth: document.querySelector('.graph-dock-graph')!.getBoundingClientRect().width,
+      detailsWidth: document.querySelector('.graph-dock-sidebar')!.getBoundingClientRect().width,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      overflowX:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflowY:
+        document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    }))
+    // Graph dock sits ABOVE the tree dock (DOM/visual order) and both fit
+    // the same viewport without any page-level scroll.
+    expect(pageState.graphDockBottom).toBeLessThanOrEqual(pageState.treeDockTop + 1)
+    expect(pageState.graphDockTop).toBeGreaterThanOrEqual(0)
+    expect(pageState.treeDockTop + 60).toBeLessThanOrEqual(pageState.viewport.h + 1)
+    // Full app content width (shell padding is 16px).
+    expect(pageState.graphLeft).toBeLessThanOrEqual(32)
+    expect(pageState.viewport.w - pageState.graphRight).toBeLessThanOrEqual(32)
+    expect(pageState.graphAreaWidth).toBeGreaterThan(pageState.detailsWidth * 2)
+    expect(pageState.overflowX).toBeLessThanOrEqual(0)
+    expect(pageState.overflowY).toBeLessThanOrEqual(0)
+  })
+
+  test('mobile portrait: graph and tree docks remain stacked without page overflow', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    await page.waitForSelector('.shudan-goban')
+    await openWinrateDock(page)
+    await openTreeDock(page)
+
+    const boxes = await page.evaluate(() => {
+      const graph = document
+        .querySelector('[data-testid="winrate-dock"]')!
+        .getBoundingClientRect()
+      const tree = document.querySelector('[data-testid="tree-dock"]')!.getBoundingClientRect()
+      return {
+      graph: { left: graph.left, right: graph.right, top: graph.top, bottom: graph.bottom },
+      graphAreaWidth: document.querySelector('.graph-dock-graph')!.getBoundingClientRect().width,
+      detailsWidth: document.querySelector('.graph-dock-sidebar')!.getBoundingClientRect().width,
+        tree: { top: tree.top, bottom: tree.bottom },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        overflowX:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        overflowY:
+          document.documentElement.scrollHeight - document.documentElement.clientHeight,
+      }
+    })
+
+    expect(boxes.graph.bottom).toBeLessThanOrEqual(boxes.tree.top + 1)
+    expect(boxes.tree.bottom).toBeLessThanOrEqual(boxes.viewport.height + 1)
+    expect(boxes.graph.right).toBeLessThanOrEqual(boxes.viewport.width - 12)
+    expect(boxes.graphAreaWidth).toBeGreaterThan(boxes.detailsWidth)
+    expect(boxes.overflowX).toBeLessThanOrEqual(0)
+    expect(boxes.overflowY).toBeLessThanOrEqual(0)
   })
 
   test('mobile portrait keeps the review panel inside the column, no overflow', async ({

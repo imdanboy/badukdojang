@@ -9,15 +9,18 @@
  * NewGameModal. Zen mode hides everything but the board.
  *
  * ONE-SCREEN shell: `#app-root` is exactly one dynamic viewport tall and
- * never scrolls at page level. The game-tree visualization (GameTreePanel)
- * is hidden by default and toggled from the ReviewPanel; while visible it
- * docks at the BOTTOM of the shell (.tree-dock) with a fixed pixel height,
- * so the .stage above flex-shrinks by exactly that amount and Board.tsx
- * re-measures the smaller slot — board and tree share the same viewport.
- * The dock is vertically resizable via a pointer/touch/keyboard separator
- * (.tree-resizer); the tree panel scrolls internally on both axes. The
- * tree is the ONE tree view in the app; the ReviewPanel keeps analysis
- * runs, 수-번호 buttons, and the winrate graph.
+ * never scrolls at page level. Two bottom docks are hidden by default and
+ * toggled from the ReviewPanel, both full app-content width:
+ *   - .graph-dock — winrate graph + the full-tree batch analysis (전체 분석)
+ *     that feeds it (WinrateDock component),
+ *   - .tree-dock — the game-tree visualization (GameTreePanel), the ONE
+ *     tree view in the app.
+ * While visible a dock has a fixed pixel height, so the .stage above
+ * flex-shrinks by that amount and Board.tsx re-measures the smaller slot —
+ * board and docks share the same viewport. Each dock is vertically
+ * resizable via a pointer/touch/keyboard separator (.tree-resizer /
+ * .graph-resizer); when BOTH are open their max heights are sandwiched
+ * against each other so stage + docks always fit one screen.
  *
  * Game flow state lives here; engine lifecycle in useEngine, analysis
  * polling in useAnalysis, scoring flow in useScoring.
@@ -34,6 +37,7 @@ import { TopBar } from './components/TopBar.tsx'
 import { GameSidebar } from './components/GameSidebar.tsx'
 import { PlaybackBar } from './components/PlaybackBar.tsx'
 import { ReviewPanel } from './components/ReviewPanel.tsx'
+import { WinrateDock } from './components/WinrateDock.tsx'
 import { GameTreePanel } from './components/GameTreePanel.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
 import { NewGameModal } from './components/NewGameModal.tsx'
@@ -82,39 +86,53 @@ import {
 import * as katagoAdapter from './lib/engine/katagoAdapter.ts'
 import { EngineError } from './lib/engine/types.ts'
 
-// --- One-screen tree dock sizing ---------------------------------------------
-// The dock is a fixed-pixel bottom region; the stage above flex-shrinks by
-// the same amount (flex: 1 1 auto + min-height: 0), so board and tree always
-// share one viewport without page-level scroll. Bounds keep a useful board
-// even on short viewports; window.innerHeight (dynamic viewport height, incl.
-// mobile URL-bar changes) is read at drag time and re-clamped on resize.
+// --- One-screen dock sizing ---------------------------------------------------
+// Each dock is a fixed-pixel bottom region; the stage above flex-shrinks by
+// the total height of the visible docks (flex: 1 1 auto + min-height: 0), so
+// board and docks always share one viewport without page-level scroll.
+// Bounds keep a useful board even on short viewports; window.innerHeight
+// (dynamic viewport height, incl. mobile URL-bar changes) is read at drag
+// time and re-clamped on resize. When both docks are open, the OTHER dock's
+// height is subtracted from each max so they cannot jointly starve the stage.
 // 14px handle + 6px dock gap + about two 32px tree rows.
 const TREE_DOCK_MIN = 88
 const TREE_DOCK_DEFAULT = 88
+// Graph dock: 14px handle + header + progress + about one graph row.
+const GRAPH_DOCK_MIN = 120
+const GRAPH_DOCK_DEFAULT = 180
 // Desktop: top bar + a minimal usable board slot + paddings/gaps.
 const MIN_STAGE_RESERVE_DESKTOP = 300
 // Below the 1024px breakpoint the controls stack UNDER the board and keep a
 // scrollable floor of their own, so the stage reserve grows accordingly.
 const MIN_STAGE_RESERVE_STACKED = 440
 
-function minTreeDockHeight(): number {
+function minDockHeight(fixedMin: number): number {
   // Very short viewports (e.g. landscape phones) may lower the floor so the
   // dock can stay open without starving the board entirely.
-  return Math.min(TREE_DOCK_MIN, Math.round(window.innerHeight * 0.25))
+  return Math.min(fixedMin, Math.round(window.innerHeight * 0.25))
+}
+
+function maxDockHeight(fixedMin: number, otherDockReserve: number): number {
+  return Math.max(
+    minDockHeight(fixedMin),
+    window.innerHeight - stageReserve() - otherDockReserve,
+  )
+}
+
+function clampDockHeight(
+  height: number,
+  fixedMin: number,
+  otherDockReserve: number,
+): number {
+  return Math.round(
+    Math.min(Math.max(height, minDockHeight(fixedMin)), maxDockHeight(fixedMin, otherDockReserve)),
+  )
 }
 
 function stageReserve(): number {
   return window.innerWidth < 1024
     ? MIN_STAGE_RESERVE_STACKED
     : MIN_STAGE_RESERVE_DESKTOP
-}
-
-function maxTreeDockHeight(): number {
-  return Math.max(minTreeDockHeight(), window.innerHeight - stageReserve())
-}
-
-function clampTreeDockHeight(height: number): number {
-  return Math.round(Math.min(Math.max(height, minTreeDockHeight()), maxTreeDockHeight()))
 }
 
 function getWinrateMeterLayout(bounds: BoardWrapBounds) {
@@ -181,14 +199,16 @@ export function App() {
     )
   }, [])
 
-  // --- Game-tree dock (one-screen layout) ------------------------------------
-  // Hidden by default; toggled from the ReviewPanel. While visible it docks
-  // at the bottom of the shell and the stage shrinks by its height, so the
-  // tree fits the same viewport. The height is user-resizable (drag or
-  // keyboard on .tree-resizer) and re-clamped when the viewport resizes.
+  // --- Bottom docks (one-screen layout) ---------------------------------------
+  // Both hidden by default; toggled from the ReviewPanel (기보 트리 /
+  // 승률 그래프). While visible each docks at the bottom of the shell and
+  // the stage shrinks by its height, so everything fits the same viewport.
+  // Each height is user-resizable (drag or keyboard on its separator) and
+  // re-clamped when the viewport resizes; the clamp of one dock accounts
+  // for the height of the other visible dock.
   const [treeVisible, setTreeVisible] = useState(false)
   const [treeDockHeight, setTreeDockHeight] = useState(() =>
-    clampTreeDockHeight(TREE_DOCK_DEFAULT),
+    clampDockHeight(TREE_DOCK_DEFAULT, TREE_DOCK_MIN, 0),
   )
   const [treeDockDragging, setTreeDockDragging] = useState(false)
   const treeDragRef = useRef<{
@@ -196,18 +216,36 @@ export function App() {
     startY: number
     startHeight: number
   } | null>(null)
+  const [winrateDockVisible, setWinrateDockVisible] = useState(false)
+  const [graphDockHeight, setGraphDockHeight] = useState(() =>
+    clampDockHeight(GRAPH_DOCK_DEFAULT, GRAPH_DOCK_MIN, 0),
+  )
+  const [graphDockDragging, setGraphDockDragging] = useState(false)
+  const graphDragRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
 
-  // Rotation / window resize: keep the dock inside the (possibly smaller)
-  // dynamic viewport so it never overflows the one-screen shell. The resize
-  // listener runs only while visible, so re-opening after the window shrank
-  // while hidden re-clamps the stored height once on becoming visible.
+  // Rotation / window resize: keep any open dock inside the (possibly
+  // smaller) dynamic viewport so it never overflows the one-screen shell.
+  // The resize listener runs only while a dock is visible, so re-opening
+  // after the window shrank while hidden re-clamps the stored height once
+  // on becoming visible.
   useEffect(() => {
-    if (!treeVisible) return
-    setTreeDockHeight((h) => clampTreeDockHeight(h))
-    const onViewportResize = () => setTreeDockHeight((h) => clampTreeDockHeight(h))
-    window.addEventListener('resize', onViewportResize)
-    return () => window.removeEventListener('resize', onViewportResize)
-  }, [treeVisible])
+    if (!treeVisible && !winrateDockVisible) return
+    const clampAll = () => {
+      setTreeDockHeight((h) =>
+        clampDockHeight(h, TREE_DOCK_MIN, winrateDockVisible ? graphDockHeight : 0),
+      )
+      setGraphDockHeight((h) =>
+        clampDockHeight(h, GRAPH_DOCK_MIN, treeVisible ? treeDockHeight : 0),
+      )
+    }
+    clampAll()
+    window.addEventListener('resize', clampAll)
+    return () => window.removeEventListener('resize', clampAll)
+  }, [treeVisible, winrateDockVisible, treeDockHeight, graphDockHeight])
 
   // --- AI game mode ---------------------------------------------------------
   const [gameMode, setGameMode] = useState<GameMode>(boot?.gameMode ?? 'selfplay')
@@ -931,9 +969,15 @@ export function App() {
 
   useToolbarShortcuts(toolbarShortcutActions, shortcutsBlocked)
 
-  // --- Tree dock resizer (pointer/touch/keyboard) ------------------------------
+  // --- Dock resizers (pointer/touch/keyboard) ----------------------------------
 
-  const handleResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const clampTree = (height: number): number =>
+    clampDockHeight(height, TREE_DOCK_MIN, winrateDockVisible ? graphDockHeight : 0)
+
+  const clampGraph = (height: number): number =>
+    clampDockHeight(height, GRAPH_DOCK_MIN, treeVisible ? treeDockHeight : 0)
+
+  const handleTreeResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
     treeDragRef.current = {
       pointerId: e.pointerId,
@@ -946,13 +990,13 @@ export function App() {
     e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  const handleResizerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleTreeResizerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = treeDragRef.current
     if (drag === null || drag.pointerId !== e.pointerId) return
     // Dragging UP grows the tree; the stage above shrinks by the same
     // amount (flex layout), clamped so a useful board always remains.
     const delta = drag.startY - e.clientY
-    setTreeDockHeight(clampTreeDockHeight(drag.startHeight + delta))
+    setTreeDockHeight(clampTree(drag.startHeight + delta))
   }
 
   const endTreeDockDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -965,7 +1009,7 @@ export function App() {
     }
   }
 
-  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleTreeResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const step = e.shiftKey ? 48 : 24
     let next: number | null = null
     if (e.key === 'ArrowUp') next = treeDockHeight + step
@@ -974,7 +1018,47 @@ export function App() {
     else if (e.key === 'End') next = Number.NEGATIVE_INFINITY
     else return
     e.preventDefault()
-    setTreeDockHeight(clampTreeDockHeight(next))
+    setTreeDockHeight(clampTree(next))
+  }
+
+  const handleGraphResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    graphDragRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startHeight: graphDockHeight,
+    }
+    setGraphDockDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handleGraphResizerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = graphDragRef.current
+    if (drag === null || drag.pointerId !== e.pointerId) return
+    const delta = drag.startY - e.clientY
+    setGraphDockHeight(clampGraph(drag.startHeight + delta))
+  }
+
+  const endGraphDockDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = graphDragRef.current
+    if (drag === null || drag.pointerId !== e.pointerId) return
+    graphDragRef.current = null
+    setGraphDockDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+
+  const handleGraphResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 48 : 24
+    let next: number | null = null
+    if (e.key === 'ArrowUp') next = graphDockHeight + step
+    else if (e.key === 'ArrowDown') next = graphDockHeight - step
+    else if (e.key === 'Home') next = Number.POSITIVE_INFINITY
+    else if (e.key === 'End') next = Number.NEGATIVE_INFINITY
+    else return
+    e.preventDefault()
+    setGraphDockHeight(clampGraph(next))
   }
 
   // --- Render --------------------------------------------------------------------
@@ -1086,17 +1170,14 @@ export function App() {
                 }
                 reviewPanel={
                   <ReviewPanel
-                    gameState={gameState}
                     gameMode={gameMode}
-                    engineEnabled={engineSettings.enabled}
-                    treeAnalysis={treeAnalysis}
-                    winratePoints={winratePoints}
                     moveNumberMode={moveNumberMode}
                     moveNumberLabelsVisible={moveNumberMap != null}
                     onMoveNumberModeSelect={handleMoveNumberMode}
-                    onGraphNodeClick={handleNavigateToNode}
                     treeVisible={treeVisible}
                     onToggleTree={() => setTreeVisible((v) => !v)}
+                    winrateDockVisible={winrateDockVisible}
+                    onToggleWinrateDock={() => setWinrateDockVisible((v) => !v)}
                   />
                 }
                 gameMode={gameMode}
@@ -1128,6 +1209,31 @@ export function App() {
           </div>
         </div>
 
+        {/* Winrate graph dock at the bottom (above the tree dock): hidden
+            until toggled on from the ReviewPanel's 승률 그래프 button. The
+            full-tree batch analysis (전체 분석) lives INSIDE the dock; the
+            graph plots results only once a run has been started. Its fixed
+            pixel height shrinks the stage above; the resizer on top is
+            pointer/touch/keyboard resizable. Zen mode hides it entirely. */}
+        {!zenMode && winrateDockVisible && (
+          <WinrateDock
+            gameState={gameState}
+            engineEnabled={engineSettings.enabled}
+            treeAnalysis={treeAnalysis}
+            winratePoints={winratePoints}
+            onGraphNodeClick={handleNavigateToNode}
+            dockHeight={graphDockHeight}
+            dragging={graphDockDragging}
+            minHeight={minDockHeight(GRAPH_DOCK_MIN)}
+            maxHeight={maxDockHeight(GRAPH_DOCK_MIN, treeVisible ? treeDockHeight : 0)}
+            onResizerPointerDown={handleGraphResizerPointerDown}
+            onResizerPointerMove={handleGraphResizerPointerMove}
+            onResizerPointerUp={endGraphDockDrag}
+            onResizerPointerCancel={endGraphDockDrag}
+            onResizerKeyDown={handleGraphResizerKeyDown}
+          />
+        )}
+
         {/* Game-tree dock at the bottom: hidden until toggled on from the
             ReviewPanel. Its fixed pixel height shrinks the stage above by
             the same amount; the resizer on top is pointer/touch/keyboard
@@ -1145,16 +1251,16 @@ export function App() {
               role="separator"
               aria-orientation="horizontal"
               aria-label="기보 트리 높이 조절"
-              aria-valuemin={minTreeDockHeight()}
-              aria-valuemax={maxTreeDockHeight()}
+              aria-valuemin={minDockHeight(TREE_DOCK_MIN)}
+              aria-valuemax={maxDockHeight(TREE_DOCK_MIN, winrateDockVisible ? graphDockHeight : 0)}
               aria-valuenow={treeDockHeight}
               tabIndex={0}
               data-dragging={treeDockDragging ? 'true' : undefined}
-              onPointerDown={handleResizerPointerDown}
-              onPointerMove={handleResizerPointerMove}
+              onPointerDown={handleTreeResizerPointerDown}
+              onPointerMove={handleTreeResizerPointerMove}
               onPointerUp={endTreeDockDrag}
               onPointerCancel={endTreeDockDrag}
-              onKeyDown={handleResizerKeyDown}
+              onKeyDown={handleTreeResizerKeyDown}
             />
             <div className="tree-section">
               <GameTreePanel

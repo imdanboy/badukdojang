@@ -6,6 +6,7 @@ import {
   collectAnalysisTargets,
   getFirstPlayer,
   getPlayerToPlayAtNode,
+  getSelectedLineMoveCount,
   layoutGameTree,
 } from './treeLayout.ts'
 import { sgfToTree } from './sgfIo.ts'
@@ -388,6 +389,21 @@ describe('buildWinratePoints', () => {
     expect(points[2]).toMatchObject({ moveNumber: 3, winrate: 0.82 })
   })
 
+  test('keeps the selected line through its end when the cursor is in the middle', () => {
+    const { tree, ids } = buildTreeWithVariation()
+    const atFirstMove = navigateToNode(tree, ids[1])!
+    const cache = new Map<string, SgfAnalysisEntry>()
+    for (const [index, nodeId] of [ids[1], ids[2], ids[3]].entries()) {
+      cache.set(nodeId, {
+        analysis: { id: 't', winrate: 0.5 + index * 0.1, scoreLead: 0 },
+        durationMs: null,
+      })
+    }
+
+    const points = buildWinratePoints(atFirstMove, cache)
+    expect(points.map((point) => point.nodeId)).toEqual([ids[1], ids[2], ids[3]])
+  })
+
   test('uncached positions are skipped, not invented', () => {
     const { tree, ids } = buildTreeWithVariation()
     const cache = new Map<string, SgfAnalysisEntry>()
@@ -403,5 +419,13 @@ describe('buildWinratePoints', () => {
   test('empty cache yields no points', () => {
     const { tree } = buildTreeWithVariation()
     expect(buildWinratePoints(tree, new Map())).toEqual([])
+  })
+})
+
+describe('getSelectedLineMoveCount', () => {
+  test('counts the selected branch through its main continuation', () => {
+    const { tree, ids } = buildTreeWithVariation()
+    expect(getSelectedLineMoveCount(navigateToNode(tree, ids[1])!)).toBe(3)
+    expect(getSelectedLineMoveCount(navigateToNode(tree, ids[4])!)).toBe(3)
   })
 })

@@ -259,35 +259,54 @@ export interface WinratePoint {
   readonly winrate: number
 }
 
+function getSelectedLineNodes(tree: GameTree): GameTreeNode[] {
+  const cursor = String(tree.currentId ?? tree.root.id)
+  const path = getPathNodes(tree, cursor)
+  if (path == null) return []
+
+  const line = [...path]
+  let node = path[path.length - 1]!
+  while (node.children.length > 0) {
+    node = node.children[0]!
+    line.push(node)
+  }
+  return line
+}
+
+/** Number of moves in the selected line through its main continuation. */
+export function getSelectedLineMoveCount(tree: GameTree): number {
+  return getSelectedLineNodes(tree).filter((node) => {
+    if (node.id === tree.root.id) return false
+    return readMoveProp(node.data as { B?: unknown[]; W?: unknown[] }) !== null
+  }).length
+}
+
 /**
- * Winrate graph series for the CURRENT path (root → cursor): one point per
- * move node that has a cached analysis (session cache or SGF-embedded KA).
- * Results from all branches stay in the cache — only the selected branch is
- * charted, keeping the graph uncluttered.
+ * Winrate graph series for the selected line: one point per move node that
+ * has a cached analysis (session cache or SGF-embedded KA). The cursor path
+ * identifies the selected variation; after the cursor, follow the first
+ * child (the tree's main continuation) so navigating within a line does not
+ * truncate the graph. Other branches stay in the cache but are not charted.
  */
 export function buildWinratePoints(
   tree: GameTree,
   cache: ReadonlyMap<string, SgfAnalysisEntry>,
 ): WinratePoint[] {
-  const cursor = String(tree.currentId ?? tree.root.id)
-  const path = getPathNodes(tree, cursor)
-  if (path == null) return []
-
   const points: WinratePoint[] = []
   let moveNumber = 0
-  for (const node of path) {
-    if (node.id === tree.root.id) continue
-    const move = readMoveProp(node.data as { B?: unknown[]; W?: unknown[] })
+  for (const lineNode of getSelectedLineNodes(tree)) {
+    if (lineNode.id === tree.root.id) continue
+    const move = readMoveProp(lineNode.data as { B?: unknown[]; W?: unknown[] })
     if (move === null) continue
     moveNumber += 1
 
-    const entry = cache.get(String(node.id))
+    const entry = cache.get(String(lineNode.id))
     const analysis = entry?.analysis
     const wr = analysis?.winrate
     if (typeof wr !== 'number' || Number.isNaN(wr)) continue
 
     points.push({
-      nodeId: String(node.id),
+      nodeId: String(lineNode.id),
       moveNumber,
       winrate: wr,
     })

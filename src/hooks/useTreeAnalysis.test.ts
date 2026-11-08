@@ -347,15 +347,13 @@ describe('useTreeAnalysis', () => {
     expect(cacheRef.current.size).toBe(4)
     expect(cacheRef.current.get(ids[1])?.analysis.winrate).toBe(0.55)
 
-    // Plotted: the current path (variation tip) charts its 3 moves, with
-    // the KA winrate converted to the Black perspective (player-to-play:
-    // after move 1 White → 1-0.55; after move 2 Black → 0.55; after move 3
-    // White → 1-0.55).
+    // Plotted: the selected line charts its 3 moves, using the stored
+    // Black-perspective winrate directly at every node.
     const points = buildWinratePoints(kaTree, cacheRef.current)
     expect(points.map((p) => p.nodeId)).toEqual([ids[1], ids[2], ids[4]])
-    expect(points[0]!.winrate).toBeCloseTo(0.45)
+    expect(points[0]!.winrate).toBeCloseTo(0.55)
     expect(points[1]!.winrate).toBeCloseTo(0.55)
-    expect(points[2]!.winrate).toBeCloseTo(0.45)
+    expect(points[2]!.winrate).toBeCloseTo(0.55)
   })
 
   test('invalid KA values are ignored and analyzed by the engine', async () => {
