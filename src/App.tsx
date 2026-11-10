@@ -54,7 +54,7 @@ import { useTreeAnalysis } from './hooks/useTreeAnalysis.ts'
 import { useScoring } from './hooks/useScoring.ts'
 import { useToolbarShortcuts } from './hooks/useToolbarShortcuts.ts'
 import type { ToolbarShortcutActions } from './hooks/useToolbarShortcuts.ts'
-import type { BoardSize, GameMode, MoveNumberMode } from './lib/types.ts'
+import type { BoardSize, GameMode, MoveNumberMode, PlacementColor } from './lib/types.ts'
 import { createGameState } from './lib/gameState.ts'
 import type { GameState } from './lib/gameState.ts'
 import { getMoveList, getMoveNumberMap } from './lib/gameTree.ts'
@@ -376,6 +376,14 @@ export function App() {
   const [moveNumberMode, setMoveNumberMode] = useState<MoveNumberMode>('hidden')
   const [moveNumberAnchorId, setMoveNumberAnchorId] = useState<string | null>(null)
 
+  // --- 놓아보기 착수 색 / 셋업 배치 -------------------------------------------
+  // UI 전용 상태 — 대국 설정 저장(autosave)에는 들어가지 않는다. 'auto'는
+  // 현재 차례 색(흑백 교대)이고, 흑/백 고정 시 차례 강제 없이 연속 착수가
+  // 가능하다. 셋업 모드가 켜지면 착수가 B/W 수순 노드 대신 AB/AW 셋업 노드로
+  // 기록되어 차례가 바뀌지 않는다 (AI 모드에서는 항상 일반 착수).
+  const [placementColor, setPlacementColor] = useState<PlacementColor>('auto')
+  const [setupPlacementMode, setSetupPlacementMode] = useState(false)
+
   const resetMoveNumbering = useCallback(() => {
     setMoveNumberMode('hidden')
     setMoveNumberAnchorId(null)
@@ -563,10 +571,11 @@ export function App() {
 
   /**
    * Apply a move (vertex or pass) to the game state, update the sign map,
-   * and play sounds.
+   * and play sounds. `sign` overrides the turn color (놓아보기 고정 색
+   * 착수) — undefined keeps the normal 흑백 교대 behavior.
    */
   const applyMove = useCallback(
-    (move: Vertex | 'pass', gs: GameState = gameState): boolean => {
+    (move: Vertex | 'pass', gs: GameState = gameState, sign?: 1 | -1): boolean => {
       const oldCaptures =
         gs.board.getCaptures(1) + gs.board.getCaptures(-1)
       let success: boolean
@@ -574,7 +583,7 @@ export function App() {
         gs.pass()
         success = true
       } else {
-        success = gs.makeMove(move)
+        success = gs.makeMove(move, sign)
       }
       if (!success) {
         setFlashTrigger((prev) => prev + 1)
@@ -680,10 +689,56 @@ export function App() {
     }
   }, [gameState, showToast, getAnalysisSettings, engineSettings.enabled, setEngineError])
 
+  /**
+   * 놓아보기 자유 착수 — 고정 색(흑/백) 수순 착수 또는 셋업(AB/AW) 배치.
+   * 색은 선택값('auto'면 현재 차례 색)을 따르고, 셋업 착수는 차례를 바꾸지
+   * 않는다. 가드(중복 자리·활로 0) 위반은 일반 착수와 동일하게 flash 로
+   * 피드백한다.
+   */
+  const applyPlacement = useCallback(
+    (vertex: Vertex): boolean => {
+      const sign: 1 | -1 =
+        placementColor === 'black'
+          ? 1
+          : placementColor === 'white'
+            ? -1
+            : (gameState.currentPlayer as 1 | -1)
+      if (setupPlacementMode) {
+        const ok = gameState.placeSetupStone(vertex, sign)
+        if (!ok) {
+          setFlashTrigger((prev) => prev + 1)
+          return false
+        }
+        // 셋업 배치로 상대 돌이 지워질 수 있으나 캡처 카운트는 그대로
+        // 유지된다(getCurrentBoard 규칙) — 단순 착수음만 낸다.
+        playStoneSound()
+        setSignMap(gameState.getSignMap())
+        setMoveVersion((v) => v + 1)
+        return true
+      }
+      return applyMove(vertex, gameState, sign)
+    },
+    [applyMove, gameState, placementColor, setupPlacementMode],
+  )
+
+  // 호버 미리보기 색: 놓아보기에서 고정 색을 고르면 그 색, 아니면 현재 차례 색.
+  // applyPlacement 의 착수 색 결정과 동일한 규칙을 써야 미리보기와 실제 착수가 일치한다.
+  const previewPlayer: 1 | -1 =
+    gameMode === 'selfplay' && placementColor !== 'auto'
+      ? placementColor === 'black'
+        ? 1
+        : -1
+      : (gameState.currentPlayer as 1 | -1)
+
   const handleVertexClick = (_evt: React.MouseEvent, vertex: Vertex) => {
     if (isAiThinkingRef.current) return
     if (isScoring) {
       handleToggleDead(vertex)
+      return
+    }
+    // 자유 착수(고정 색/셋업)는 놓아보기 전용 — AI 대국은 항상 정상 교대.
+    if (gameMode === 'selfplay' && (setupPlacementMode || placementColor !== 'auto')) {
+      applyPlacement(vertex)
       return
     }
     const success = applyMove(vertex)
@@ -1138,6 +1193,7 @@ export function App() {
               flashTrigger={flashTrigger}
               showCoordinates={showCoordinates}
               currentPlayer={gameState.currentPlayer}
+              previewPlayer={previewPlayer}
               aiGhostVertex={aiGhostVertex}
               aiFlashVertex={aiFlashVertex}
               ownership={ownership}
@@ -1174,6 +1230,16 @@ export function App() {
                     moveNumberMode={moveNumberMode}
                     moveNumberLabelsVisible={moveNumberMap != null}
                     onMoveNumberModeSelect={handleMoveNumberMode}
+                    placementColor={placementColor}
+                    onPlacementColorSelect={(color) => {
+                      setPlacementColor(color)
+                      // 교대 = 일반 수순 착수. 셋업이 켜진 채로 두면 차례가 바뀌지 않는다.
+                      if (color === 'auto') setSetupPlacementMode(false)
+                    }}
+                    setupPlacementMode={setupPlacementMode}
+                    onToggleSetupPlacement={() =>
+                      setSetupPlacementMode((prev) => !prev)
+                    }
                     treeVisible={treeVisible}
                     onToggleTree={() => setTreeVisible((v) => !v)}
                     winrateDockVisible={winrateDockVisible}

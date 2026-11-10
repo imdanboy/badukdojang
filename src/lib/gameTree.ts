@@ -159,14 +159,18 @@ function hasNoOtherBoardProps(
 
 /**
  * Find an existing child of `parentId` that represents exactly the same
- * board action as the move/pass about to be appended, so replaying a line
- * reuses it instead of creating a duplicate sibling variation.
+ * board action as the move/pass/setup stone about to be appended, so
+ * replaying a line reuses it instead of creating a duplicate sibling
+ * variation.
  */
 function findReusableChild(
   tree: GameTree,
   parentId: string | number,
-  prop: 'B' | 'W',
-  matches: (data: Record<string, Primitive[]>, prop: 'B' | 'W') => boolean,
+  prop: 'B' | 'W' | 'AB' | 'AW',
+  matches: (
+    data: Record<string, Primitive[]>,
+    prop: 'B' | 'W' | 'AB' | 'AW',
+  ) => boolean,
 ): GameTreeNode | null {
   const parentNode = tree.get(parentId)
   return (
@@ -242,6 +246,50 @@ export function appendPass(tree: GameTree, sign: number): GameTree {
 
   const newTree = tree.mutate((draft) => {
     draft.appendNode(currentId, { [prop]: [] })
+  })
+
+  const currentNode = newTree.get(currentId)
+  const newNode = currentNode?.children[currentNode.children.length - 1]
+  newTree.currentId = newNode?.id ?? currentId
+
+  return newTree
+}
+
+/**
+ * Append a setup stone (AB/AW single coordinate) as its own child node under
+ * the current node and move the cursor onto it. Setup nodes carry NO B/W
+ * property, so the existing rules apply unchanged:
+ *   - getMoveList skips them → the move count and derived turn (차례) never
+ *     change, and they never appear in the engine move replay,
+ *   - getMoveNumberMap gives them no label (무번호),
+ *   - getCurrentBoard / getSetupStones replay and surface them like any
+ *     other AB/AW (screenshot-import path), so no new data format exists.
+ * A child that is the exact same single-coordinate setup (same property,
+ * no other board props) is reused instead of duplicated, mirroring
+ * appendMove. Returns a NEW tree (the input is never mutated).
+ */
+export function appendSetup(tree: GameTree, vertex: Vertex, sign: number): GameTree {
+  const currentId = tree.currentId ?? tree.root.id
+  const prop = sign === 1 ? 'AB' : 'AW'
+  const coord = vertexToSgf(vertex)
+
+  const reused = findReusableChild(tree, currentId, prop, (data, p) => {
+    const values = data[p]
+    return (
+      values != null &&
+      values.length === 1 &&
+      values[0] === coord &&
+      hasNoOtherBoardProps(data, p)
+    )
+  })
+  if (reused != null) {
+    const newTree = cloneTree(tree)
+    newTree.currentId = reused.id
+    return newTree
+  }
+
+  const newTree = tree.mutate((draft) => {
+    draft.appendNode(currentId, { [prop]: [coord] })
   })
 
   const currentNode = newTree.get(currentId)

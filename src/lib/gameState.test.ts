@@ -259,3 +259,119 @@ describe('gameState', () => {
     expect(gs.lastMove).toEqual([6, 6])
   })
 })
+
+describe('gameState — fixed-color moves (놓아보기 착수 색)', () => {
+  test('explicit player places that color repeatedly without turn enforcement', () => {
+    const gs = createGameState(9)
+    expect(gs.makeMove([0, 0], 1)).toBe(true) // black
+    expect(gs.makeMove([1, 1], 1)).toBe(true) // black again — 연속 착수
+    expect(gs.makeMove([2, 2], -1)).toBe(true) // white
+
+    expect(gs.getSignMap()[0]![0]).toBe(1)
+    expect(gs.getSignMap()[1]![1]).toBe(1)
+    expect(gs.getSignMap()[2]![2]).toBe(-1)
+    // Recorded as B/B/W move nodes.
+    expect(gs.gameTree.root.children[0]!.data.B).toEqual(['aa'])
+    expect(gs.gameTree.root.children[0]!.children[0]!.data.B).toEqual(['bb'])
+    expect(gs.gameTree.root.children[0]!.children[0]!.children[0]!.data.W).toEqual(['cc'])
+  })
+
+  test('next turn follows the placed color (opposite), matching 흑백 교대', () => {
+    const gs = createGameState(9)
+    gs.makeMove([0, 0], -1) // white placed while it is black's turn
+    expect(gs.currentPlayer).toBe(1) // next auto color is black
+  })
+
+  test('default makeMove still alternates (기존 동작 회귀)', () => {
+    const gs = createGameState(9)
+    gs.makeMove([0, 0])
+    gs.makeMove([1, 1])
+    expect(gs.getSignMap()[0]![0]).toBe(1)
+    expect(gs.getSignMap()[1]![1]).toBe(-1)
+    expect(gs.currentPlayer).toBe(1)
+  })
+})
+
+describe('gameState — setup stones (셋업 배치 AB/AW)', () => {
+  test('placeSetupStone records AB/AW and keeps the turn and lastMove', () => {
+    const gs = createGameState(9)
+    gs.makeMove([0, 0]) // 1 move — white to play
+    const turnBefore = gs.currentPlayer
+    const lastMoveBefore = gs.lastMove
+
+    expect(gs.placeSetupStone([4, 4], -1)).toBe(true)
+    expect(gs.placeSetupStone([5, 5], 1)).toBe(true)
+
+    expect(gs.getSignMap()[4]![4]).toBe(-1)
+    expect(gs.getSignMap()[5]![5]).toBe(1)
+    expect(gs.currentPlayer).toBe(turnBefore) // 차례 불변
+    expect(gs.lastMove).toEqual(lastMoveBefore)
+
+    // Nodes carry setup properties, no B/W — they never count as moves.
+    const tip = gs.gameTree.get(gs.gameTree.currentId!)!
+    expect(tip.data.AB).toEqual(['ff'])
+    expect(tip.data.B).toBeUndefined()
+  })
+
+  test('occupied vertex rejected (no overwrite)', () => {
+    const gs = createGameState(9)
+    gs.makeMove([4, 4])
+    expect(gs.placeSetupStone([4, 4], -1)).toBe(false)
+    expect(gs.getSignMap()[4]![4]).toBe(1)
+    // Setup nodes were not appended either.
+    expect(gs.gameTree.root.children[0]!.children).toHaveLength(0)
+  })
+
+  test('0-liberty setup placement rejected (착수 후 활로 0인 그룹 차단)', () => {
+    const gs = createGameState(9)
+    // Surround the corner point (0,0) with black stones.
+    gs.placeSetupStone([1, 0], 1)
+    gs.placeSetupStone([0, 1], 1)
+    expect(gs.placeSetupStone([0, 0], -1)).toBe(false) // white would have 0 liberties
+    expect(gs.getSignMap()[0]![0]).toBe(0)
+    expect(gs.placeSetupStone([0, 0], 1)).toBe(true) // same color joins the group with liberties
+    expect(gs.getSignMap()[0]![0]).toBe(1)
+  })
+
+  test('capturing setup placement is allowed and the board stays navigation-consistent', () => {
+    const gs = createGameState(9)
+    // White corner stone at (0,0); black setup stone at (0,1) plus a move
+    // at (1,0) capture it — replay must match the live board exactly.
+    gs.placeSetupStone([0, 0], -1)
+    gs.makeMove([1, 0]) // B
+    expect(gs.placeSetupStone([0, 1], 1)).toBe(true) // captures W(0,0)
+
+    expect(gs.getSignMap()[0]![0]).toBe(0)
+    expect(gs.getSignMap()[1]![0]).toBe(1)
+    expect(gs.getSignMap()[0]![1]).toBe(1)
+    // Setup captures do not count toward the capture tally (getCurrentBoard rule).
+    expect(gs.board.getCaptures(1)).toBe(0)
+
+    // Navigating away and back rebuilds the identical position.
+    expect(gs.undo()).toBe(true)
+    expect(gs.redo()).toBe(true)
+    expect(gs.getSignMap()[0]![0]).toBe(0)
+    expect(gs.getSignMap()[0]![1]).toBe(1)
+  })
+
+  test('undo removes a setup stone and restores the previous position', () => {
+    const gs = createGameState(9)
+    gs.placeSetupStone([2, 2], 1)
+    const afterSetup = gs.getSignMap()
+    expect(gs.undo()).toBe(true)
+    expect(gs.getSignMap()[2]![2]).toBe(0)
+    expect(gs.currentPlayer).toBe(1)
+    // Redo reapplies it from the tree.
+    expect(gs.redo()).toBe(true)
+    expect(gs.getSignMap()).toEqual(afterSetup)
+  })
+
+  test('a game with only setup stones restores from its tree with the turn preserved', () => {
+    const gs = createGameState(9)
+    expect(gs.placeSetupStone([3, 3], -1)).toBe(true)
+    const restored = createGameState(9, gs.gameTree)
+    expect(restored.getSignMap()[3]![3]).toBe(-1)
+    expect(restored.currentPlayer).toBe(1) // no moves — black to play
+    expect(restored.lastMove).toBeNull()
+  })
+})

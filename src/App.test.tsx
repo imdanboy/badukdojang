@@ -1863,3 +1863,171 @@ describe('Review — winrate graph dock (bottom, full width)', () => {
     expect(graphMax + treeNow).toBeLessThanOrEqual(window.innerHeight - 300)
   })
 })
+
+describe('놓아보기 — 착수 색 선택과 셋업 배치', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    cleanup()
+  })
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  /** SGF of the current autosave draft (tree content assertions). */
+  function draftSgf(): string {
+    const raw = localStorage.getItem(ACTIVE_GAME_STORAGE_KEY)
+    expect(raw).not.toBeNull()
+    return (JSON.parse(raw!) as { sgf: string }).sgf
+  }
+
+  test('default state: 자동 색 + 셋업 off — alternating moves (기존 동작 보존)', async () => {
+    render(<App />)
+
+    expect(document.getElementById('placement-color-auto')!.getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(document.getElementById('placement-color-black')!.getAttribute('aria-pressed')).toBe(
+      'false',
+    )
+    expect(document.getElementById('placement-color-white')!.getAttribute('aria-pressed')).toBe(
+      'false',
+    )
+    expect(document.getElementById('setup-toggle')!.getAttribute('aria-pressed')).toBe('false')
+    expect(document.getElementById('setup-mode-indicator')).toBeNull()
+
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain(';B[dd]')
+    expect(sgf).toContain(';W[ee]')
+    expect(sgf).not.toContain('AB[')
+  })
+
+  test('흑 고정: consecutive black moves bypass turn enforcement', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('placement-color-black')!)
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain(';B[dd]')
+    expect(sgf).toContain(';B[ee]')
+    expect(sgf).not.toContain('W[')
+  })
+
+  test('백 고정: white moves from the empty board', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('placement-color-white')!)
+    await clickVertex(5, 5, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain(';W[ff]')
+    expect(sgf).not.toContain(';B[')
+  })
+
+  test('셋업 토글: clicks record AB/AW, turn never changes, indicator shown', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    expect(document.getElementById('setup-mode-indicator')?.textContent).toBe('셋업 배치 중')
+
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain('AB[dd]')
+    expect(sgf).toContain('AB[ee]')
+    expect(sgf).not.toContain(';B[')
+    expect(sgf).not.toContain(';W[')
+
+    // 차례 불변: no move nodes → still black to play.
+    expect(screen.getByText(/To Play:/).textContent).toContain('Black')
+
+    // Toggle off — the indicator disappears and clicks become normal moves.
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    expect(document.getElementById('setup-mode-indicator')).toBeNull()
+    await clickVertex(8, 8, 19)
+    expect(draftSgf()).toContain(';B[ii]')
+    // The normal move flipped the turn (setup placements never did).
+    expect(screen.getByText(/To Play:/).textContent).toContain('White')
+  })
+
+  test('교대 선택은 셋업을 끄고 일반 수순으로 착수한다 (차례 교대)', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    fireEvent.click(document.getElementById('placement-color-auto')!)
+    expect(document.getElementById('setup-mode-indicator')).toBeNull()
+
+    await clickVertex(3, 3, 19)
+    const sgf = draftSgf()
+    expect(sgf).toContain(';B[dd]')
+    expect(sgf).not.toContain('AB[')
+    expect(screen.getByText(/To Play:/).textContent).toContain('White')
+  })
+
+  test('셋업 + 흑/백 색 선택: AB/AW follows the selected color', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    fireEvent.click(document.getElementById('placement-color-white')!)
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain('AW[dd]')
+    expect(sgf).toContain('AW[ee]')
+    expect(sgf).not.toContain('AB[')
+  })
+
+  test('setup placement rejects an occupied vertex and keeps the turn', async () => {
+    render(<App />)
+
+    await clickVertex(3, 3, 19) // B move — white to play
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    await clickVertex(3, 3, 19) // occupied — rejected
+
+    const sgf = draftSgf()
+    expect(sgf).toContain(';B[dd]')
+    expect(sgf).not.toContain('AB[')
+    expect(screen.getByText(/To Play:/).textContent).toContain('White')
+  })
+
+  test('setup stones get no move-number labels in 전체 수순 mode', async () => {
+    render(<App />)
+
+    // One setup stone, then one normal move.
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    await clickVertex(2, 2, 19)
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    await clickVertex(3, 3, 19)
+
+    fireEvent.click(document.getElementById('move-number-all')!)
+    const labels = document.querySelectorAll('.board-move-label')
+    expect(labels).toHaveLength(1)
+    const label = labels[0]!
+    expect(label.getAttribute('data-x')).toBe('3')
+    expect(label.getAttribute('data-y')).toBe('3')
+    expect(label.textContent).toBe('1')
+  })
+
+  test('setup mode is inert in AI mode — clicks alternate normally', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    fireEvent.click(screen.getByText('AI 대국'))
+
+    // The selfplay-only controls are hidden in AI mode; state must not leak.
+    expect(document.getElementById('setup-toggle')).toBeNull()
+    await clickVertex(3, 3, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain(';B[dd]')
+    expect(sgf).not.toContain('AB[')
+    // White's turn — but the engine mock reply is ignored for assertions here.
+  })
+})

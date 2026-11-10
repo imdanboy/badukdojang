@@ -26,6 +26,11 @@ export interface BoardProps {
   flashTrigger?: number
   showCoordinates?: boolean
   currentPlayer: 1 | -1
+  /**
+   * 빈 교차점 호버 미리보기 돌 색. 생략하면 currentPlayer 를 따른다.
+   * 놓아보기에서 착수 색을 흑/백으로 고정하면 그 색을 넘긴다.
+   */
+  previewPlayer?: 1 | -1
   aiGhostVertex?: Vertex | null
   aiFlashVertex?: Vertex | null
   /** KataGo ownership flat array (length boardSize^2, [-1,1]). null/undefined = no data. */
@@ -81,6 +86,7 @@ export function Board({
   flashTrigger = 0,
   showCoordinates = true,
   currentPlayer,
+  previewPlayer,
   aiGhostVertex = null,
   aiFlashVertex = null,
   ownership = null,
@@ -260,7 +266,8 @@ export function Board({
       candidate.vertex[1] === hoveredVertex[1] &&
       signMap[hoveredVertex[1]]?.[hoveredVertex[0]] === 0,
   )
-  const hoveredStoneUrl = currentPlayer === 1 ? currentTheme.blackStoneUrl : currentTheme.whiteStoneUrl
+  const hoverColor = previewPlayer ?? currentPlayer
+  const hoveredStoneUrl = hoverColor === 1 ? currentTheme.blackStoneUrl : currentTheme.whiteStoneUrl
 
   // Ownership marks skip candidate-move vertices: the numeric candidate
   // marker is drawn there, and the overlays would stack on top of each other.
@@ -357,7 +364,7 @@ export function Board({
           vertexSize={vertexSize}
           signMap={signMap}
           showCoordinates={showCoordinates}
-          currentPlayer={currentPlayer}
+          currentPlayer={hoverColor}
           {...(dimmedVertices !== undefined ? { dimmedVertices } : {})}
           {...(onVertexClick !== undefined ? { onVertexClick } : {})}
           {...(candidateMoves !== undefined && candidateMoves.length > 0

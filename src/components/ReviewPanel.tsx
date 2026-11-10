@@ -3,6 +3,9 @@
  *   1. 수 번호 표시 모드 — 놓아보기 전용: "전체 수순"(현재 경로 1부터)과
  *      "번호 표시"(선택 노드 이후 착수만 1로, 이미 놓인 돌은 무번호).
  *      같은 버튼 재클릭 = 끄기. 전체 수순이 켜진 동안 번호 표시는 비활성.
+ *   1b. 착수 색 + 셋업 배치 — 놓아보기 전용: 교대(흑백 번갈아 수순)/흑/백 고정
+ *      착수와, 켜는 동안 착수가 AB/AW 셋업 돌로 기록되는 셋업 토글.
+ *      셋업 토글은 구분선 뒤 별도 영역에 표시한다.
  *   2. 기보 트리 토글 — the game-tree dock at the bottom of the shell is
  *      hidden by default; this button shows/hides it (one-screen layout).
  *   3. 승률 그래프 토글 — the winrate-graph dock at the bottom of the shell
@@ -14,7 +17,7 @@
  * so both get the entire app content width. Exactly one of each exists.
  * Visual language matches the other panels (#1a1a2e / #3b3b5c / #5a7fb5).
  */
-import type { GameMode, MoveNumberMode } from '../lib/types.ts'
+import type { GameMode, MoveNumberMode, PlacementColor } from '../lib/types.ts'
 
 export interface ReviewPanelProps {
   /** 놓아보기(selfplay) 전용 패널: 수 번호 버튼은 AI 모드에서 숨는다. */
@@ -25,6 +28,12 @@ export interface ReviewPanelProps {
   moveNumberLabelsVisible: boolean
   /** 'all' | 'fromCurrent' 요청 — 활성 버튼 재클릭(끄기)도 이 콜백이 처리한다. */
   onMoveNumberModeSelect: (mode: Exclude<MoveNumberMode, 'hidden'>) => void
+  /** 착수 색: 'auto'(흑백 교대, 기본값) | 'black' | 'white'. */
+  placementColor: PlacementColor
+  onPlacementColorSelect: (color: PlacementColor) => void
+  /** 셋업 배치 모드 — 켜지면 착수가 B/W 수순 대신 AB/AW 로 기록된다. */
+  setupPlacementMode: boolean
+  onToggleSetupPlacement: () => void
   /** 기보 트리 독(dock) 표시 여부 — 기본 숨김, 토글 버튼으로만 등장. */
   treeVisible: boolean
   onToggleTree: () => void
@@ -66,6 +75,10 @@ export function ReviewPanel({
   moveNumberMode,
   moveNumberLabelsVisible,
   onMoveNumberModeSelect,
+  placementColor,
+  onPlacementColorSelect,
+  setupPlacementMode,
+  onToggleSetupPlacement,
   treeVisible,
   onToggleTree,
   winrateDockVisible,
@@ -161,6 +174,72 @@ export function ReviewPanel({
               {moveNumberLabelsVisible
                 ? '선택 노드 이후 착수부터 1번'
                 : '시작점이 현재 경로 밖 — 이동 후 다시 누르세요'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {gameMode === 'selfplay' && (
+        <div
+          role="group"
+          aria-label="착수 색과 셋업 배치"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '6px',
+            fontSize: '12px',
+          }}
+        >
+          <span style={{ opacity: 0.7 }}>착수</span>
+          <button
+            id="placement-color-auto"
+            style={smallBtnStyle(placementColor === 'auto', false)}
+            aria-pressed={placementColor === 'auto'}
+            title="흑백을 번갈아 두는 일반 수순 착수입니다 (기본값)."
+            onClick={() => onPlacementColorSelect('auto')}
+          >
+            교대
+          </button>
+          <button
+            id="placement-color-black"
+            style={smallBtnStyle(placementColor === 'black', false)}
+            aria-pressed={placementColor === 'black'}
+            title="차례와 관계없이 흑 돌을 연속으로 놓습니다."
+            onClick={() => onPlacementColorSelect('black')}
+          >
+            흑
+          </button>
+          <button
+            id="placement-color-white"
+            style={smallBtnStyle(placementColor === 'white', false)}
+            aria-pressed={placementColor === 'white'}
+            title="차례와 관계없이 백 돌을 연속으로 놓습니다."
+            onClick={() => onPlacementColorSelect('white')}
+          >
+            백
+          </button>
+          <span
+            aria-hidden="true"
+            style={{ width: '1px', alignSelf: 'stretch', background: '#3b3b5c', margin: '0 4px' }}
+          />
+          <span style={{ opacity: 0.7 }}>셋업</span>
+          <button
+            id="setup-toggle"
+            style={{
+              ...smallBtnStyle(false, false),
+              background: setupPlacementMode ? '#3d7a4f' : '#2a2a40',
+              border: setupPlacementMode ? '1px solid #8fd08f' : '1px dashed #5a5a7c',
+            }}
+            aria-pressed={setupPlacementMode}
+            title="켜지면 착수가 수순 대신 셋업 돌(AB/AW)로 기록됩니다. 차례와 수 번호에 영향을 주지 않습니다. 다시 누르면 끕니다."
+            onClick={onToggleSetupPlacement}
+          >
+            {setupPlacementMode ? '셋업 켜짐' : '셋업 끔'}
+          </button>
+          {setupPlacementMode && (
+            <span id="setup-mode-indicator" style={{ fontSize: '11px', color: '#8fd08f' }}>
+              셋업 배치 중
             </span>
           )}
         </div>

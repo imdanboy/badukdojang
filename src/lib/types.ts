@@ -11,3 +11,11 @@ export type GameMode = 'selfplay' | 'ai'
  *                    시작점이 현재 경로를 벗어나면 번호를 숨긴다
  */
 export type MoveNumberMode = 'hidden' | 'all' | 'fromCurrent'
+
+/**
+ * 놓아보기 착수 색:
+ *  - 'auto'  — 흑백 교대 (현재 차례 색으로 착수, 기본값)
+ *  - 'black' | 'white' — 고정 색 연속 착수 (차례 강제 없음)
+ * 셋업 토글이 켜지면 같은 색 규칙이 AB/AW 기록에 적용된다.
+ */
+export type PlacementColor = 'auto' | 'black' | 'white'

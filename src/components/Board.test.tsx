@@ -49,6 +49,28 @@ describe('Board candidate hover preview', () => {
     })
   })
 
+  test('previewPlayer overrides the stone color shown on hover', async () => {
+    render(
+      <BoardThemeProvider>
+        <Board
+          signMap={signMap}
+          boardSize={9}
+          currentPlayer={1}
+          previewPlayer={-1}
+          showCoordinates={false}
+          candidateMoves={candidateMoves}
+        />
+      </BoardThemeProvider>,
+    )
+
+    fireEvent.mouseMove(document.querySelector('.shudan-content')!)
+
+    await waitFor(() => {
+      const preview = document.querySelector('.candidate-hover-stone')
+      expect(preview?.getAttribute('href')).toContain('stone-white')
+    })
+  })
+
   test('does not show a candidate stone on an occupied intersection', async () => {
     const occupiedSignMap = signMap.map((row) => [...row])
     occupiedSignMap[3]![2] = 1

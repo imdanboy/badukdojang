@@ -2,10 +2,12 @@ import { describe, expect, test } from 'vitest'
 import {
   appendMove,
   appendPass,
+  appendSetup,
   createGameTree,
   getCurrentSignMap,
   getMoveList,
   getMoveNumberMap,
+  getSetupStones,
   getPathNodes,
   navigateToNode,
   redo,
@@ -479,6 +481,87 @@ describe('getMoveNumberMap — fromNodeId (번호 표시 numbering)', () => {
     expect(numbers[0]![0]).toBeNull() // W(0,0) — first move after the anchor, but captured
     expect(numbers[1]![0]).toBe(2) // B(0,1) — counter keeps moving through the capture
     expect(numbers[4]![4]).toBeNull() // setup stone — unlabeled even in view
+  })
+})
+
+describe('appendSetup (놓아보기 셋업 배치)', () => {
+  test('appends a black setup stone as an AB node and moves the cursor', () => {
+    const tree = createGameTree(9)
+    const newTree = appendSetup(tree, [2, 3], 1)
+    expect(newTree.currentId).not.toBe(tree.root.id)
+    const node = newTree.get(newTree.currentId!)
+    expect(node?.data.AB).toEqual(['cd'])
+    expect(node?.data.B).toBeUndefined()
+    expect(node?.data.W).toBeUndefined()
+  })
+
+  test('appends a white setup stone as an AW node', () => {
+    const tree = createGameTree(9)
+    const newTree = appendSetup(tree, [4, 4], -1)
+    const node = newTree.get(newTree.currentId!)
+    expect(node?.data.AW).toEqual(['ee'])
+  })
+
+  test('setup nodes carry no move property — move list and turn stay unchanged', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [0, 0], 1) // 1 move → white to play
+    const t2 = appendSetup(t1, [2, 2], -1) // setup — no move node
+    const t3 = appendSetup(t2, [3, 3], 1) // setup — no move node
+
+    expect(getMoveList(t3)).toEqual([{ vertex: [0, 0], sign: 1 }])
+    // Still white to play: the derived turn (move count parity) is untouched.
+    expect(getMoveList(t3)).toHaveLength(1)
+  })
+
+  test('setup stones show on the board but get no move number', () => {
+    const tree = createGameTree(9)
+    const t1 = appendSetup(tree, [0, 0], 1)
+    const t2 = appendMove(t1, [2, 2], 1)
+
+    const signMap = getCurrentSignMap(t2, 9)
+    expect(signMap[0]![0]).toBe(1) // setup stone on the board
+    expect(signMap[2]![2]).toBe(1)
+
+    const numbers = getMoveNumberMap(t2, 9)!
+    expect(numbers[0]![0]).toBeNull() // 무번호 — setup rule
+    expect(numbers[2]![2]).toBe(1) // the move is number 1
+  })
+
+  test('setup stones are collected by getSetupStones for engine replay', () => {
+    const tree = createGameTree(9)
+    const t1 = appendMove(tree, [0, 0], 1)
+    const t2 = appendSetup(t1, [2, 2], 1)
+    const t3 = appendSetup(t2, [3, 3], -1)
+
+    expect(getSetupStones(t3)).toEqual([
+      { vertex: [2, 2], sign: 1 },
+      { vertex: [3, 3], sign: -1 },
+    ])
+  })
+
+  test('replays reuse an identical sibling setup node instead of duplicating', () => {
+    const tree = createGameTree(9)
+    const t1 = appendSetup(tree, [2, 2], 1)
+    const setupId = String(t1.currentId!)
+
+    const atRoot = navigateToNode(t1, 'root')!
+    const replay = appendSetup(atRoot, [2, 2], 1)
+    expect(String(replay.currentId!)).toBe(setupId)
+    expect(replay.root.children).toHaveLength(1)
+
+    // A different coordinate or color is a separate sibling.
+    const other = appendSetup(atRoot, [3, 3], 1)
+    expect(other.root.children).toHaveLength(2)
+    const white = appendSetup(navigateToNode(other, 'root')!, [3, 3], -1)
+    expect(white.root.children).toHaveLength(3)
+  })
+
+  test('a move appended after setup stones follows the real move parity', () => {
+    const tree = createGameTree(9)
+    const t1 = appendSetup(tree, [0, 0], 1)
+    const t2 = appendMove(t1, [2, 2], 1) // first move — black
+    const node = t2.get(t2.currentId!)
+    expect(node?.data.B).toEqual(['cc'])
   })
 })
 

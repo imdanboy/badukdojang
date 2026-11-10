@@ -3,6 +3,7 @@ import type { SignMap, Vertex } from '@kaya/goboard'
 import {
   appendMove as appendMoveToTree,
   appendPass as appendPassToTree,
+  appendSetup as appendSetupToTree,
   createGameTree,
   getCurrentBoard,
   getMoveList,
@@ -19,8 +20,21 @@ export interface GameState {
   currentPlayer: Player
   lastMove: Vertex | null
   gameTree: GameTree
-  makeMove(vertex: Vertex): boolean
+  /**
+   * Place a stone and record it as a B/W move node. By default the stone
+   * uses `currentPlayer` (흑백 교대). Passing an explicit `player` places
+   * that color regardless of the turn (놓아보기 고정 색 연속 착수) — the
+   * next turn still becomes the opposite of the placed color.
+   */
+  makeMove(vertex: Vertex, player?: Player): boolean
   pass(): void
+  /**
+   * Record a setup stone (AB/AW node) — 놓아보기 셋업 배치. The board-level
+   * guards still apply (occupied vertex and 0-liberty placement rejected,
+   * captures allowed, ko irrelevant for setup), but the turn (currentPlayer)
+   * and lastMove never change: setup nodes carry no B/W property.
+   */
+  placeSetupStone(vertex: Vertex, sign: Player): boolean
   getSignMap(): SignMap
   undo(): boolean
   redo(): boolean
@@ -74,21 +88,43 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     currentPlayer = deriveCurrentPlayer()
   }
 
-  function makeMove(vertex: Vertex): boolean {
+  function makeMove(vertex: Vertex, player?: Player): boolean {
+    const sign = player ?? currentPlayer
     try {
-      const newBoard = board.makeMove(currentPlayer, vertex, {
+      const newBoard = board.makeMove(sign, vertex, {
         preventOverwrite: true,
         preventSuicide: true,
         preventKo: true,
       })
       board = newBoard
-      gameTree = appendMoveToTree(gameTree, vertex, currentPlayer)
+      gameTree = appendMoveToTree(gameTree, vertex, sign)
       lastMove = vertex
-      currentPlayer = currentPlayer === 1 ? -1 : 1
+      currentPlayer = sign === 1 ? -1 : 1
       return true
     } catch {
       return false
     }
+  }
+
+  function placeSetupStone(vertex: Vertex, sign: Player): boolean {
+    // 착수 가드: 중복 자리(preventOverwrite)와 착수 후 활로가 0인
+    // 배치(preventSuicide — 상대 돌을 캡처해 활로가 생기면 허용)를 막는다.
+    // 포석 배치에는 패 규칙이 없으므로 preventKo 는 끈다.
+    try {
+      board.makeMove(sign, vertex, {
+        preventOverwrite: true,
+        preventSuicide: true,
+        preventKo: false,
+      })
+    } catch {
+      return false
+    }
+    // Board 는 트리 재생(syncFromTree)으로 재구성한다 — getCurrentBoard 의
+    // setup 규칙(캡처 카운트 불가, 자살 가드 없음)과 정확히 일치하는 상태가
+    // 되어 네비게이션 이후 상태와도 같아진다.
+    gameTree = appendSetupToTree(gameTree, vertex, sign)
+    syncFromTree()
+    return true
   }
 
   function pass(): void {
@@ -161,6 +197,7 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     },
     makeMove,
     pass,
+    placeSetupStone,
     getSignMap,
     undo,
     redo,
