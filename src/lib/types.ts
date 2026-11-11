@@ -13,9 +13,9 @@ export type GameMode = 'selfplay' | 'ai'
 export type MoveNumberMode = 'hidden' | 'all' | 'fromCurrent'
 
 /**
- * 놓아보기 착수 색:
- *  - 'auto'  — 흑백 교대 (현재 차례 색으로 착수, 기본값)
- *  - 'black' | 'white' — 고정 색 연속 착수 (차례 강제 없음)
- * 셋업 토글이 켜지면 같은 색 규칙이 AB/AW 기록에 적용된다.
+ * 놓아보기 셋업 착수 색 (셋업 토글이 켜졌을 때만 적용):
+ *  - 'auto'  — 흑백 교대로 AB/AW 기록 (기본값)
+ *  - 'black' | 'white' — 해당 색으로 연속 기록
+ * 일반 수순 착수는 항상 흑백 교대이며 이 값의 영향을 받지 않는다.
  */
 export type PlacementColor = 'auto' | 'black' | 'white'

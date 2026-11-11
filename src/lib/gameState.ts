@@ -21,13 +21,17 @@ export interface GameState {
   lastMove: Vertex | null
   gameTree: GameTree
   /**
-   * Place a stone and record it as a B/W move node. By default the stone
-   * uses `currentPlayer` (흑백 교대). Passing an explicit `player` places
-   * that color regardless of the turn (놓아보기 고정 색 연속 착수) — the
-   * next turn still becomes the opposite of the placed color.
+   * Place a stone as a B/W move node for the side to move (흑백 교대).
+   * The turn always alternates; there is no way to place the same color twice.
    */
-  makeMove(vertex: Vertex, player?: Player): boolean
+  makeMove(vertex: Vertex): boolean
   pass(): void
+  /**
+   * Color for the next setup stone when the 착수 색 is 교대 (auto): the
+   * opposite of the setup stone at the cursor if it is an AB/AW node, else
+   * the side to move. Lets consecutive setup stones alternate 흑/백.
+   */
+  getAutoSetupColor(): Player
   /**
    * Record a setup stone (AB/AW node) — 놓아보기 셋업 배치. The board-level
    * guards still apply (occupied vertex and 0-liberty placement rejected,
@@ -88,8 +92,8 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     currentPlayer = deriveCurrentPlayer()
   }
 
-  function makeMove(vertex: Vertex, player?: Player): boolean {
-    const sign = player ?? currentPlayer
+  function makeMove(vertex: Vertex): boolean {
+    const sign = currentPlayer
     try {
       const newBoard = board.makeMove(sign, vertex, {
         preventOverwrite: true,
@@ -104,6 +108,15 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     } catch {
       return false
     }
+  }
+
+  function getAutoSetupColor(): Player {
+    const data = gameTree.get(gameTree.currentId ?? gameTree.root.id)?.data as
+      | { AB?: unknown[]; AW?: unknown[] }
+      | undefined
+    if ((data?.AB?.length ?? 0) > 0) return -1
+    if ((data?.AW?.length ?? 0) > 0) return 1
+    return currentPlayer
   }
 
   function placeSetupStone(vertex: Vertex, sign: Player): boolean {
@@ -197,6 +210,7 @@ export function createGameState(size: number, initialTree?: GameTree): GameState
     },
     makeMove,
     pass,
+    getAutoSetupColor,
     placeSetupStone,
     getSignMap,
     undo,

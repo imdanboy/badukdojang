@@ -260,35 +260,45 @@ describe('gameState', () => {
   })
 })
 
-describe('gameState — fixed-color moves (놓아보기 착수 색)', () => {
-  test('explicit player places that color repeatedly without turn enforcement', () => {
+describe('gameState — 일반 착수는 항상 흑백 교대', () => {
+  test('makeMove alternates colors and records B/W move nodes', () => {
     const gs = createGameState(9)
-    expect(gs.makeMove([0, 0], 1)).toBe(true) // black
-    expect(gs.makeMove([1, 1], 1)).toBe(true) // black again — 연속 착수
-    expect(gs.makeMove([2, 2], -1)).toBe(true) // white
+    expect(gs.makeMove([0, 0])).toBe(true) // black
+    expect(gs.makeMove([1, 1])).toBe(true) // white
+    expect(gs.makeMove([2, 2])).toBe(true) // black
 
-    expect(gs.getSignMap()[0]![0]).toBe(1)
-    expect(gs.getSignMap()[1]![1]).toBe(1)
-    expect(gs.getSignMap()[2]![2]).toBe(-1)
-    // Recorded as B/B/W move nodes.
-    expect(gs.gameTree.root.children[0]!.data.B).toEqual(['aa'])
-    expect(gs.gameTree.root.children[0]!.children[0]!.data.B).toEqual(['bb'])
-    expect(gs.gameTree.root.children[0]!.children[0]!.children[0]!.data.W).toEqual(['cc'])
-  })
-
-  test('next turn follows the placed color (opposite), matching 흑백 교대', () => {
-    const gs = createGameState(9)
-    gs.makeMove([0, 0], -1) // white placed while it is black's turn
-    expect(gs.currentPlayer).toBe(1) // next auto color is black
-  })
-
-  test('default makeMove still alternates (기존 동작 회귀)', () => {
-    const gs = createGameState(9)
-    gs.makeMove([0, 0])
-    gs.makeMove([1, 1])
     expect(gs.getSignMap()[0]![0]).toBe(1)
     expect(gs.getSignMap()[1]![1]).toBe(-1)
+    expect(gs.getSignMap()[2]![2]).toBe(1)
+    expect(gs.gameTree.root.children[0]!.data.B).toEqual(['aa'])
+    expect(gs.gameTree.root.children[0]!.children[0]!.data.W).toEqual(['bb'])
+    expect(gs.gameTree.root.children[0]!.children[0]!.children[0]!.data.B).toEqual(['cc'])
+    expect(gs.currentPlayer).toBe(-1)
+  })
+})
+
+describe('gameState — getAutoSetupColor (셋업 교대 색)', () => {
+  test('empty tree: the side to move', () => {
+    const gs = createGameState(9)
+    expect(gs.getAutoSetupColor()).toBe(1)
+  })
+
+  test('after a black setup stone the next auto color is white, and vice versa', () => {
+    const gs = createGameState(9)
+    expect(gs.placeSetupStone([0, 0], gs.getAutoSetupColor())).toBe(true) // B
+    expect(gs.getAutoSetupColor()).toBe(-1)
+    expect(gs.placeSetupStone([1, 1], gs.getAutoSetupColor())).toBe(true) // W
+    expect(gs.getAutoSetupColor()).toBe(1)
+    expect(gs.getSignMap()[0]![0]).toBe(1)
+    expect(gs.getSignMap()[1]![1]).toBe(-1)
+    // Setup placements never change the turn.
     expect(gs.currentPlayer).toBe(1)
+  })
+
+  test('after a normal move the setup color follows the side to move', () => {
+    const gs = createGameState(9)
+    gs.makeMove([0, 0]) // B move — white to play
+    expect(gs.getAutoSetupColor()).toBe(-1)
   })
 })
 

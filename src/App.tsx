@@ -153,6 +153,16 @@ function getWinrateMeterLayout(bounds: BoardWrapBounds) {
   }
 }
 
+/**
+ * 셋업 중 착수 색: 흑/백 고정이면 그 색, 교대면 커서 기준 반대 색.
+ * 호버 미리보기와 실제 착수가 같은 규칙을 쓰도록 한 곳에서 계산한다.
+ */
+function setupColorFor(color: PlacementColor, gs: GameState): 1 | -1 {
+  if (color === 'black') return 1
+  if (color === 'white') return -1
+  return gs.getAutoSetupColor()
+}
+
 export function App() {
   // --- Game state -----------------------------------------------------------
   // Boot restores the active-game recovery draft synchronously (sleep/tab
@@ -377,10 +387,10 @@ export function App() {
   const [moveNumberAnchorId, setMoveNumberAnchorId] = useState<string | null>(null)
 
   // --- 놓아보기 착수 색 / 셋업 배치 -------------------------------------------
-  // UI 전용 상태 — 대국 설정 저장(autosave)에는 들어가지 않는다. 'auto'는
-  // 현재 차례 색(흑백 교대)이고, 흑/백 고정 시 차례 강제 없이 연속 착수가
-  // 가능하다. 셋업 모드가 켜지면 착수가 B/W 수순 노드 대신 AB/AW 셋업 노드로
-  // 기록되어 차례가 바뀌지 않는다 (AI 모드에서는 항상 일반 착수).
+  // UI 전용 상태 — 대국 설정 저장(autosave)에는 들어가지 않는다. 일반 착수는
+  // 항상 흑백 교대다. 셋업 모드가 켜지면 착수가 B/W 수순 노드 대신 AB/AW 셋업
+  // 노드로 기록되어 차례가 바뀌지 않는다. 셋업 중 착수 색은 교대(기본) 또는
+  // 흑/백 고정이다 (AI 모드에서는 셋업 자체가 무시된다).
   const [placementColor, setPlacementColor] = useState<PlacementColor>('auto')
   const [setupPlacementMode, setSetupPlacementMode] = useState(false)
 
@@ -571,11 +581,10 @@ export function App() {
 
   /**
    * Apply a move (vertex or pass) to the game state, update the sign map,
-   * and play sounds. `sign` overrides the turn color (놓아보기 고정 색
-   * 착수) — undefined keeps the normal 흑백 교대 behavior.
+   * and play sounds. Moves always follow the 흑백 교대 turn.
    */
   const applyMove = useCallback(
-    (move: Vertex | 'pass', gs: GameState = gameState, sign?: 1 | -1): boolean => {
+    (move: Vertex | 'pass', gs: GameState = gameState): boolean => {
       const oldCaptures =
         gs.board.getCaptures(1) + gs.board.getCaptures(-1)
       let success: boolean
@@ -583,7 +592,7 @@ export function App() {
         gs.pass()
         success = true
       } else {
-        success = gs.makeMove(move, sign)
+        success = gs.makeMove(move)
       }
       if (!success) {
         setFlashTrigger((prev) => prev + 1)
@@ -690,44 +699,31 @@ export function App() {
   }, [gameState, showToast, getAnalysisSettings, engineSettings.enabled, setEngineError])
 
   /**
-   * 놓아보기 자유 착수 — 고정 색(흑/백) 수순 착수 또는 셋업(AB/AW) 배치.
-   * 색은 선택값('auto'면 현재 차례 색)을 따르고, 셋업 착수는 차례를 바꾸지
-   * 않는다. 가드(중복 자리·활로 0) 위반은 일반 착수와 동일하게 flash 로
-   * 피드백한다.
+   * 셋업 배치(AB/AW) — 놓아보기 셋업이 켜진 동안에만 쓰인다. 색은 착수 색
+   * 선택을 따르며('auto'면 교대), 셋업 착수는 차례를 바꾸지 않는다. 가드
+   * (중복 자리·활로 0) 위반은 flash 로 피드백한다.
    */
-  const applyPlacement = useCallback(
+  const applySetupPlacement = useCallback(
     (vertex: Vertex): boolean => {
-      const sign: 1 | -1 =
-        placementColor === 'black'
-          ? 1
-          : placementColor === 'white'
-            ? -1
-            : (gameState.currentPlayer as 1 | -1)
-      if (setupPlacementMode) {
-        const ok = gameState.placeSetupStone(vertex, sign)
-        if (!ok) {
-          setFlashTrigger((prev) => prev + 1)
-          return false
-        }
-        // 셋업 배치로 상대 돌이 지워질 수 있으나 캡처 카운트는 그대로
-        // 유지된다(getCurrentBoard 규칙) — 단순 착수음만 낸다.
-        playStoneSound()
-        setSignMap(gameState.getSignMap())
-        setMoveVersion((v) => v + 1)
-        return true
+      const ok = gameState.placeSetupStone(vertex, setupColorFor(placementColor, gameState))
+      if (!ok) {
+        setFlashTrigger((prev) => prev + 1)
+        return false
       }
-      return applyMove(vertex, gameState, sign)
+      // 셋업 배치로 상대 돌이 지워질 수 있으나 캡처 카운트는 그대로
+      // 유지된다(getCurrentBoard 규칙) — 단순 착수음만 낸다.
+      playStoneSound()
+      setSignMap(gameState.getSignMap())
+      setMoveVersion((v) => v + 1)
+      return true
     },
-    [applyMove, gameState, placementColor, setupPlacementMode],
+    [gameState, placementColor],
   )
 
-  // 호버 미리보기 색: 놓아보기에서 고정 색을 고르면 그 색, 아니면 현재 차례 색.
-  // applyPlacement 의 착수 색 결정과 동일한 규칙을 써야 미리보기와 실제 착수가 일치한다.
+  // 호버 미리보기 색: 셋업 착수면 그 색, 아니면 현재 차례 색.
   const previewPlayer: 1 | -1 =
-    gameMode === 'selfplay' && placementColor !== 'auto'
-      ? placementColor === 'black'
-        ? 1
-        : -1
+    gameMode === 'selfplay' && setupPlacementMode
+      ? setupColorFor(placementColor, gameState)
       : (gameState.currentPlayer as 1 | -1)
 
   const handleVertexClick = (_evt: React.MouseEvent, vertex: Vertex) => {
@@ -736,9 +732,9 @@ export function App() {
       handleToggleDead(vertex)
       return
     }
-    // 자유 착수(고정 색/셋업)는 놓아보기 전용 — AI 대국은 항상 정상 교대.
-    if (gameMode === 'selfplay' && (setupPlacementMode || placementColor !== 'auto')) {
-      applyPlacement(vertex)
+    // 셋업 배치는 놓아보기 전용 — AI 대국은 항상 정상 교대.
+    if (gameMode === 'selfplay' && setupPlacementMode) {
+      applySetupPlacement(vertex)
       return
     }
     const success = applyMove(vertex)
@@ -1231,11 +1227,7 @@ export function App() {
                     moveNumberLabelsVisible={moveNumberMap != null}
                     onMoveNumberModeSelect={handleMoveNumberMode}
                     placementColor={placementColor}
-                    onPlacementColorSelect={(color) => {
-                      setPlacementColor(color)
-                      // 교대 = 일반 수순 착수. 셋업이 켜진 채로 두면 차례가 바뀌지 않는다.
-                      if (color === 'auto') setSetupPlacementMode(false)
-                    }}
+                    onPlacementColorSelect={setPlacementColor}
                     setupPlacementMode={setupPlacementMode}
                     onToggleSetupPlacement={() =>
                       setSetupPlacementMode((prev) => !prev)

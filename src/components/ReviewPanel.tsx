@@ -3,9 +3,9 @@
  *   1. 수 번호 표시 모드 — 놓아보기 전용: "전체 수순"(현재 경로 1부터)과
  *      "번호 표시"(선택 노드 이후 착수만 1로, 이미 놓인 돌은 무번호).
  *      같은 버튼 재클릭 = 끄기. 전체 수순이 켜진 동안 번호 표시는 비활성.
- *   1b. 착수 색 + 셋업 배치 — 놓아보기 전용: 교대(흑백 번갈아 수순)/흑/백 고정
- *      착수와, 켜는 동안 착수가 AB/AW 셋업 돌로 기록되는 셋업 토글.
- *      셋업 토글은 구분선 뒤 별도 영역에 표시한다.
+ *   1b. 셋업 배치 — 놓아보기 전용: 켜는 동안 착수가 AB/AW 셋업 돌로 기록된다.
+ *      셋업 색(교대/흑/백)은 셋업이 켜졌을 때만 활성화되며, 일반 착수는
+ *      항상 흑백 교대다. 셋업 토글은 구분선 뒤 별도 영역에 표시한다.
  *   2. 기보 트리 토글 — the game-tree dock at the bottom of the shell is
  *      hidden by default; this button shows/hides it (one-screen layout).
  *   3. 승률 그래프 토글 — the winrate-graph dock at the bottom of the shell
@@ -28,7 +28,7 @@ export interface ReviewPanelProps {
   moveNumberLabelsVisible: boolean
   /** 'all' | 'fromCurrent' 요청 — 활성 버튼 재클릭(끄기)도 이 콜백이 처리한다. */
   onMoveNumberModeSelect: (mode: Exclude<MoveNumberMode, 'hidden'>) => void
-  /** 착수 색: 'auto'(흑백 교대, 기본값) | 'black' | 'white'. */
+  /** 셋업 착수 색: 'auto'(흑백 교대, 기본값) | 'black' | 'white'. 셋업 OFF면 비활성. */
   placementColor: PlacementColor
   onPlacementColorSelect: (color: PlacementColor) => void
   /** 셋업 배치 모드 — 켜지면 착수가 B/W 수순 대신 AB/AW 로 기록된다. */
@@ -191,30 +191,45 @@ export function ReviewPanel({
             fontSize: '12px',
           }}
         >
-          <span style={{ opacity: 0.7 }}>착수</span>
+          <span style={{ opacity: 0.7 }}>셋업 색</span>
           <button
             id="placement-color-auto"
-            style={smallBtnStyle(placementColor === 'auto', false)}
+            style={smallBtnStyle(placementColor === 'auto', !setupPlacementMode)}
             aria-pressed={placementColor === 'auto'}
-            title="흑백을 번갈아 두는 일반 수순 착수입니다 (기본값)."
+            disabled={!setupPlacementMode}
+            title={
+              setupPlacementMode
+                ? '셋업 돌을 흑백 번갈아 놓습니다 (기본값).'
+                : '셋업을 켜야 사용할 수 있습니다'
+            }
             onClick={() => onPlacementColorSelect('auto')}
           >
             교대
           </button>
           <button
             id="placement-color-black"
-            style={smallBtnStyle(placementColor === 'black', false)}
+            style={smallBtnStyle(placementColor === 'black', !setupPlacementMode)}
             aria-pressed={placementColor === 'black'}
-            title="차례와 관계없이 흑 돌을 연속으로 놓습니다."
+            disabled={!setupPlacementMode}
+            title={
+              setupPlacementMode
+                ? '셋업 돌을 흑으로 연속 놓습니다.'
+                : '셋업을 켜야 사용할 수 있습니다'
+            }
             onClick={() => onPlacementColorSelect('black')}
           >
             흑
           </button>
           <button
             id="placement-color-white"
-            style={smallBtnStyle(placementColor === 'white', false)}
+            style={smallBtnStyle(placementColor === 'white', !setupPlacementMode)}
             aria-pressed={placementColor === 'white'}
-            title="차례와 관계없이 백 돌을 연속으로 놓습니다."
+            disabled={!setupPlacementMode}
+            title={
+              setupPlacementMode
+                ? '셋업 돌을 백으로 연속 놓습니다.'
+                : '셋업을 켜야 사용할 수 있습니다'
+            }
             onClick={() => onPlacementColorSelect('white')}
           >
             백

@@ -1905,31 +1905,27 @@ describe('놓아보기 — 착수 색 선택과 셋업 배치', () => {
     expect(sgf).not.toContain('AB[')
   })
 
-  test('흑 고정: consecutive black moves bypass turn enforcement', async () => {
+  test('셋업이 꺼진 상태에서 흑/백 색 버튼은 비활성 — 착수는 항상 교대', async () => {
     render(<App />)
 
-    fireEvent.click(document.getElementById('placement-color-black')!)
+    const black = document.getElementById('placement-color-black') as HTMLButtonElement
+    const white = document.getElementById('placement-color-white') as HTMLButtonElement
+    expect(black.disabled).toBe(true)
+    expect(white.disabled).toBe(true)
+    fireEvent.click(black)
+    expect(black.getAttribute('aria-pressed')).toBe('false')
+
     await clickVertex(3, 3, 19)
     await clickVertex(4, 4, 19)
 
     const sgf = draftSgf()
     expect(sgf).toContain(';B[dd]')
-    expect(sgf).toContain(';B[ee]')
-    expect(sgf).not.toContain('W[')
+    expect(sgf).toContain(';W[ee]')
+    expect(sgf).not.toContain(';B[ee]')
+    expect(sgf).not.toContain('AB[')
   })
 
-  test('백 고정: white moves from the empty board', async () => {
-    render(<App />)
-
-    fireEvent.click(document.getElementById('placement-color-white')!)
-    await clickVertex(5, 5, 19)
-
-    const sgf = draftSgf()
-    expect(sgf).toContain(';W[ff]')
-    expect(sgf).not.toContain(';B[')
-  })
-
-  test('셋업 토글: clicks record AB/AW, turn never changes, indicator shown', async () => {
+  test('셋업 토글: clicks record AB/AW alternately, turn never changes, indicator shown', async () => {
     render(<App />)
 
     fireEvent.click(document.getElementById('setup-toggle')!)
@@ -1940,7 +1936,7 @@ describe('놓아보기 — 착수 색 선택과 셋업 배치', () => {
 
     const sgf = draftSgf()
     expect(sgf).toContain('AB[dd]')
-    expect(sgf).toContain('AB[ee]')
+    expect(sgf).toContain('AW[ee]')
     expect(sgf).not.toContain(';B[')
     expect(sgf).not.toContain(';W[')
 
@@ -1956,18 +1952,39 @@ describe('놓아보기 — 착수 색 선택과 셋업 배치', () => {
     expect(screen.getByText(/To Play:/).textContent).toContain('White')
   })
 
-  test('교대 선택은 셋업을 끄고 일반 수순으로 착수한다 (차례 교대)', async () => {
+  test('셋업 중 교대 선택은 셋업을 유지하고 AB/AW 를 번갈아 기록한다', async () => {
     render(<App />)
 
     fireEvent.click(document.getElementById('setup-toggle')!)
     fireEvent.click(document.getElementById('placement-color-auto')!)
-    expect(document.getElementById('setup-mode-indicator')).toBeNull()
+    expect(document.getElementById('setup-mode-indicator')?.textContent).toBe('셋업 배치 중')
 
     await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+    await clickVertex(5, 5, 19)
+
+    const sgf = draftSgf()
+    expect(sgf).toContain('AB[dd]')
+    expect(sgf).toContain('AW[ee]')
+    expect(sgf).toContain('AB[ff]')
+    expect(sgf).not.toContain(';B[')
+    expect(sgf).not.toContain(';W[')
+    expect(screen.getByText(/To Play:/).textContent).toContain('Black')
+  })
+
+  test('셋업 끈 상태의 일반 착수는 셋업 색 설정과 무관하게 교대한다', async () => {
+    render(<App />)
+
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    fireEvent.click(document.getElementById('placement-color-white')!)
+    fireEvent.click(document.getElementById('setup-toggle')!)
+    await clickVertex(3, 3, 19)
+    await clickVertex(4, 4, 19)
+
     const sgf = draftSgf()
     expect(sgf).toContain(';B[dd]')
-    expect(sgf).not.toContain('AB[')
-    expect(screen.getByText(/To Play:/).textContent).toContain('White')
+    expect(sgf).toContain(';W[ee]')
+    expect(sgf).not.toContain('AW[')
   })
 
   test('셋업 + 흑/백 색 선택: AB/AW follows the selected color', async () => {
