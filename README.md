@@ -154,3 +154,24 @@ runtime-configured public URL) instead of relying on Vite's dev server.
 | `bun run test:run` | Run the Vitest unit suite once |
 | `bun run e2e` | Run the Playwright end-to-end suite |
 | `bun run typecheck` | Type-check the SPA only (excludes the Bun server) |
+
+## License
+
+badukdojang is distributed under the GNU Affero General Public License
+version 3 (AGPL-3.0); see [`LICENSE`](LICENSE) for the full license text.
+
+The Kaya packages are included as the `third_party/kaya` Git submodule and
+retain their own AGPL-3.0 license and copyright notices. The parent repository
+pins the exact Kaya commit it uses; `bun run setup` initializes the submodule
+and applies any repository-maintained Kaya patches. To obtain the complete
+source tree after cloning, run:
+
+```bash
+git submodule update --init --recursive
+```
+
+When distributing a build or operating a network service, provide recipients
+with access to the corresponding source and applicable license notices as
+required by AGPL-3.0. This repository does not bundle KataGo binaries or
+neural-network models; users obtain those separately. Their terms need review
+if we later bundle, mirror, or redistribute them.
